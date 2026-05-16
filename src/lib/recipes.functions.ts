@@ -94,7 +94,10 @@ const recipeBaseSchema = z.object({
 
 type RecipeDto = z.infer<typeof recipeBaseSchema>;
 
-const recipeSchema: z.ZodType<RecipeDto> = z.preprocess(normalizeRecipe, recipeBaseSchema);
+const recipeSchema: z.ZodType<RecipeDto, z.ZodTypeDef, unknown> = z.preprocess(
+  normalizeRecipe,
+  recipeBaseSchema,
+);
 
 function buildSystemPrompt(ctx: {
   appliance: string;

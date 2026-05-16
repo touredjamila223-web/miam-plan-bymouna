@@ -11,8 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RecettesRouteImport } from './routes/recettes'
 import { Route as ProfilRouteImport } from './routes/profil'
+import { Route as PlanningRouteImport } from './routes/planning'
 import { Route as MesRecettesRouteImport } from './routes/mes-recettes'
 import { Route as GenererRouteImport } from './routes/generer'
+import { Route as FrigoRouteImport } from './routes/frigo'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
@@ -29,6 +31,11 @@ const ProfilRoute = ProfilRouteImport.update({
   path: '/profil',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlanningRoute = PlanningRouteImport.update({
+  id: '/planning',
+  path: '/planning',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MesRecettesRoute = MesRecettesRouteImport.update({
   id: '/mes-recettes',
   path: '/mes-recettes',
@@ -37,6 +44,11 @@ const MesRecettesRoute = MesRecettesRouteImport.update({
 const GenererRoute = GenererRouteImport.update({
   id: '/generer',
   path: '/generer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FrigoRoute = FrigoRouteImport.update({
+  id: '/frigo',
+  path: '/frigo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChatRoute = ChatRouteImport.update({
@@ -69,8 +81,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
   '/mes-recettes': typeof MesRecettesRoute
+  '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
@@ -80,8 +94,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
   '/mes-recettes': typeof MesRecettesRoute
+  '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
@@ -92,8 +108,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
   '/mes-recettes': typeof MesRecettesRoute
+  '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
@@ -105,8 +123,10 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/chat'
+    | '/frigo'
     | '/generer'
     | '/mes-recettes'
+    | '/planning'
     | '/profil'
     | '/recettes'
     | '/api/chat'
@@ -116,8 +136,10 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/chat'
+    | '/frigo'
     | '/generer'
     | '/mes-recettes'
+    | '/planning'
     | '/profil'
     | '/recettes'
     | '/api/chat'
@@ -127,8 +149,10 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/chat'
+    | '/frigo'
     | '/generer'
     | '/mes-recettes'
+    | '/planning'
     | '/profil'
     | '/recettes'
     | '/api/chat'
@@ -139,8 +163,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   ChatRoute: typeof ChatRoute
+  FrigoRoute: typeof FrigoRoute
   GenererRoute: typeof GenererRoute
   MesRecettesRoute: typeof MesRecettesRoute
+  PlanningRoute: typeof PlanningRoute
   ProfilRoute: typeof ProfilRoute
   RecettesRoute: typeof RecettesRouteWithChildren
   ApiChatRoute: typeof ApiChatRoute
@@ -162,6 +188,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfilRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/planning': {
+      id: '/planning'
+      path: '/planning'
+      fullPath: '/planning'
+      preLoaderRoute: typeof PlanningRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/mes-recettes': {
       id: '/mes-recettes'
       path: '/mes-recettes'
@@ -174,6 +207,13 @@ declare module '@tanstack/react-router' {
       path: '/generer'
       fullPath: '/generer'
       preLoaderRoute: typeof GenererRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/frigo': {
+      id: '/frigo'
+      path: '/frigo'
+      fullPath: '/frigo'
+      preLoaderRoute: typeof FrigoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/chat': {
@@ -230,8 +270,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   ChatRoute: ChatRoute,
+  FrigoRoute: FrigoRoute,
   GenererRoute: GenererRoute,
   MesRecettesRoute: MesRecettesRoute,
+  PlanningRoute: PlanningRoute,
   ProfilRoute: ProfilRoute,
   RecettesRoute: RecettesRouteWithChildren,
   ApiChatRoute: ApiChatRoute,
@@ -239,3 +281,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

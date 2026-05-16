@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { listMealPlan, upsertMealPlan, removeMealPlan } from "@/lib/planning.functions";
-import { listRecipes } from "@/lib/recipes.functions";
+import { listMyRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { CalendarDays, X, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 
@@ -32,7 +32,7 @@ function PlanningPage() {
   const listPlan = useServerFn(listMealPlan);
   const upsert = useServerFn(upsertMealPlan);
   const remove = useServerFn(removeMealPlan);
-  const listRec = useServerFn(listRecipes);
+  const listRec = useServerFn(listMyRecipes);
 
   const { data: plan } = useQuery({
     queryKey: ["plan", weekStartStr],

@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
-import { generateText, Output } from "ai";
+import { generateObject } from "ai";
 
 const recipeSchema = z.object({
   title: z.string(),
@@ -14,7 +14,7 @@ const recipeSchema = z.object({
   servings: z.number().int().min(1).max(20),
   appliance: z.string(),
   protein: z.string(),
-  vegetables: z.array(z.string()).default([]),
+  vegetables: z.array(z.string()),
   calories: z.number().int().min(50).max(2000),
   ingredients: z.array(z.object({ name: z.string(), qty: z.string() })).min(2),
   steps: z
@@ -84,13 +84,13 @@ export const generateRecipe = createServerFn({ method: "POST" })
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
 
-    const { experimental_output } = await generateText({
+    const { object } = await generateObject({
       model,
       system: buildSystemPrompt({ appliance: data.appliance, restrictions, servings, family_name }),
       prompt: `Génère une recette complète pour : ${data.prompt}`,
-      experimental_output: Output.object({ schema: recipeSchema }),
+      schema: recipeSchema,
     });
-    return experimental_output;
+    return object;
   });
 
 // Public — generate without account (guest mode)
@@ -103,7 +103,7 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
     if (!apiKey) throw new Error("Clé Lovable AI manquante");
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
-    const { experimental_output } = await generateText({
+    const { object } = await generateObject({
       model,
       system: buildSystemPrompt({
         appliance: data.appliance,
@@ -112,9 +112,9 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
         family_name: null,
       }),
       prompt: `Génère une recette complète pour : ${data.prompt}`,
-      experimental_output: Output.object({ schema: recipeSchema }),
+      schema: recipeSchema,
     });
-    return experimental_output;
+    return object;
   });
 
 const saveSchema = recipeSchema.extend({
@@ -154,7 +154,7 @@ async function generateBatchOnce(opts: {
 }) {
   const gateway = createLovableAiGatewayProvider(opts.apiKey);
   const model = gateway("google/gemini-3-flash-preview");
-  const { experimental_output } = await generateText({
+  const { object } = await generateObject({
     model,
     system: buildSystemPrompt({
       appliance: opts.appliance,
@@ -163,12 +163,12 @@ async function generateBatchOnce(opts: {
       family_name: opts.family_name,
     }),
     prompt: buildBatchPrompt(opts.exclude, opts.hint),
-    experimental_output: Output.object({ schema: batchSchema }),
+    schema: batchSchema,
   });
-  // Enforce max 2 same protein (post-check, regenerate offenders deterministically by trimming)
+  // Enforce max 2 same protein (post-check, deterministic trim)
   const counts: Record<string, number> = {};
-  const kept: typeof experimental_output.recipes = [];
-  for (const r of experimental_output.recipes) {
+  const kept: typeof object.recipes = [];
+  for (const r of object.recipes) {
     const p = (r.protein ?? "").toLowerCase().trim();
     counts[p] = (counts[p] ?? 0) + 1;
     if (counts[p] <= 2) kept.push(r);
@@ -182,16 +182,9 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error("Clé Lovable AI manquante");
 
-    let restrictions = data.restrictions ?? [];
-    let servings = data.servings ?? 4;
-    let family_name: string | null = null;
-
-    // If authenticated, enrich with profile/prefs
-    try {
-      const authHeader = (globalThis as any).process?.env ? null : null;
-      // Skipped here — public-callable; profile context handled in chat/other fns
-    } catch {}
-
+    const restrictions = data.restrictions ?? [];
+    const servings = data.servings ?? 4;
+    const family_name: string | null = null;
     const exclude = data.exclude ?? [];
     let kept = await generateBatchOnce({
       apiKey,

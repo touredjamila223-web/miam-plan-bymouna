@@ -13,6 +13,9 @@ const recipeSchema = z.object({
   prep_time: z.number().int().min(5).max(360),
   servings: z.number().int().min(1).max(20),
   appliance: z.string(),
+  protein: z.string(),
+  vegetables: z.array(z.string()).default([]),
+  calories: z.number().int().min(50).max(2000),
   ingredients: z.array(z.object({ name: z.string(), qty: z.string() })).min(2),
   steps: z
     .array(
@@ -38,6 +41,9 @@ Règles ABSOLUES :
 - La recette DOIT avoir une identité culinaire claire (français, italien, oriental, asiatique, méditerranéen, tex-mex, libanais, indien, japonais...). Tous les ingrédients, épices, sauces et accompagnements doivent appartenir à ce style. Aucune association incohérente.
 - Les légumes doivent s'accorder naturellement avec la protéine et le style.
 - La recette doit donner envie et être savoureuse, pas une simple liste d'ingrédients.
+- Renseigne "protein" avec la protéine principale en un seul mot simple (poulet, boeuf, agneau, porc, poisson, fruits de mer, oeufs, tofu, légumineuses, fromage, végétarien).
+- Renseigne "vegetables" avec la liste des légumes utilisés (3 à 6 entrées, nom simple en minuscules).
+- Renseigne "calories" : estimation honnête des kcal par portion.
 - Préférences alimentaires à respecter ABSOLUMENT (aucun ingrédient interdit) : ${
     ctx.restrictions.length ? ctx.restrictions.join(", ") : "aucune"
   }.

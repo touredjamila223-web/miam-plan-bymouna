@@ -296,6 +296,7 @@ export type Database = {
       recipes: {
         Row: {
           appliance: string | null
+          calories: number | null
           created_at: string | null
           cuisine_style: string | null
           description: string | null
@@ -305,13 +306,16 @@ export type Database = {
           owner_id: string | null
           photo_url: string | null
           prep_time: number | null
+          protein: string | null
           servings: number | null
           source: string | null
           steps: Json
           title: string
+          vegetables: string[] | null
         }
         Insert: {
           appliance?: string | null
+          calories?: number | null
           created_at?: string | null
           cuisine_style?: string | null
           description?: string | null
@@ -321,13 +325,16 @@ export type Database = {
           owner_id?: string | null
           photo_url?: string | null
           prep_time?: number | null
+          protein?: string | null
           servings?: number | null
           source?: string | null
           steps?: Json
           title: string
+          vegetables?: string[] | null
         }
         Update: {
           appliance?: string | null
+          calories?: number | null
           created_at?: string | null
           cuisine_style?: string | null
           description?: string | null
@@ -337,10 +344,12 @@ export type Database = {
           owner_id?: string | null
           photo_url?: string | null
           prep_time?: number | null
+          protein?: string | null
           servings?: number | null
           source?: string | null
           steps?: Json
           title?: string
+          vegetables?: string[] | null
         }
         Relationships: []
       }

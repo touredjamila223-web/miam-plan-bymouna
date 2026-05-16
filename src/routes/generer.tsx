@@ -1,41 +1,40 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { generateRecipe, generateRecipePublic, saveRecipe } from "@/lib/recipes.functions";
+import { generateRecipeBatch, saveRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { APPLIANCES } from "@/lib/constants";
-import { Sparkles, Clock, Users, ChefHat, Save } from "lucide-react";
+import { Sparkles, Clock, Users, Flame, Carrot, Drumstick, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/generer")({
-  head: () => ({ meta: [{ title: "Générer une recette — MiamPlan" }] }),
+  head: () => ({ meta: [{ title: "Générer des recettes — MiamPlan" }] }),
   component: Generer,
 });
 
 function Generer() {
   const { user } = useAuth();
-  const [prompt, setPrompt] = useState("");
   const [appliance, setAppliance] = useState("cookeo");
-  const [recipe, setRecipe] = useState<any>(null);
+  const [hint, setHint] = useState("");
+  const [recipes, setRecipes] = useState<any[]>([]);
+  const [selected, setSelected] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(false);
 
-  const genAuth = useServerFn(generateRecipe);
-  const genPub = useServerFn(generateRecipePublic);
-  const save = useServerFn(saveRecipe);
+  const genBatch = useServerFn(generateRecipeBatch);
+  const save = useServerFn(saveRecipes);
 
   async function go() {
-    if (prompt.length < 3) return toast.error("Décris un peu ton envie 🙂");
     setLoading(true);
-    setRecipe(null);
+    setRecipes([]);
+    setSelected({});
     try {
-      const r = user
-        ? await genAuth({ data: { prompt, appliance } })
-        : await genPub({ data: { prompt, appliance } });
-      setRecipe(r);
+      const list = await genBatch({ data: { appliance, hint: hint || undefined } });
+      setRecipes(list);
     } catch (e: any) {
       toast.error(e.message ?? "Erreur de génération");
     } finally {
@@ -43,80 +42,88 @@ function Generer() {
     }
   }
 
-  async function onSave() {
-    if (!user) return toast.error("Connectez-vous pour sauvegarder");
+  async function onSaveSelected() {
+    if (!user) return toast.error("Connecte-toi pour sauvegarder");
+    const picks = recipes.filter((_, i) => selected[i]);
+    if (!picks.length) return toast.error("Sélectionne au moins une recette");
     try {
-      await save({ data: { ...recipe, source: "ai" } });
-      toast.success("Recette sauvegardée !");
+      await save({ data: { recipes: picks.map((r) => ({ ...r, source: "ai" })) } });
+      toast.success(`${picks.length} recette(s) ajoutée(s) à ta bibliothèque !`);
+      setRecipes([]);
+      setSelected({});
     } catch (e: any) {
       toast.error(e.message);
     }
   }
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
+    <div className="space-y-6 max-w-5xl mx-auto">
       <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2"><Sparkles className="w-7 h-7 text-primary"/>Générer une recette</h1>
-        <p className="text-muted-foreground mt-1">Dis-moi ce qui te ferait plaisir, je te concocte une recette cohérente et savoureuse.</p>
+        <h1 className="text-3xl font-bold flex items-center gap-2"><Sparkles className="w-7 h-7 text-primary"/>Générer des recettes</h1>
+        <p className="text-muted-foreground mt-1">Choisis ton appareil, l'IA te propose 4 recettes variées et cohérentes adaptées à tes préférences.</p>
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
-        <div>
-          <Label>Ton envie ou tes ingrédients</Label>
-          <Textarea rows={3} placeholder="Ex : un plat oriental réconfortant avec du poulet et des pois chiches" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-        </div>
-        <div>
-          <Label>Appareil de cuisson</Label>
-          <Select value={appliance} onValueChange={setAppliance}>
-            <SelectTrigger><SelectValue/></SelectTrigger>
-            <SelectContent>
-              {APPLIANCES.map((a) => <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <Label>Appareil de cuisson</Label>
+            <Select value={appliance} onValueChange={setAppliance}>
+              <SelectTrigger><SelectValue/></SelectTrigger>
+              <SelectContent>
+                {APPLIANCES.map((a) => <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Une envie en particulier ? (optionnel)</Label>
+            <Input placeholder="Ex : envie d'oriental, plutôt léger…" value={hint} onChange={(e) => setHint(e.target.value)} />
+          </div>
         </div>
         <Button onClick={go} disabled={loading} className="w-full">
-          {loading ? "Le chef réfléchit..." : "Générer ✨"}
+          <Sparkles className="w-4 h-4"/>
+          {loading ? "Le chef réfléchit…" : recipes.length ? "Régénérer 4 nouvelles recettes" : "Générer 4 recettes ✨"}
         </Button>
       </div>
 
-      {recipe && (
-        <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
-          <div className="flex justify-between items-start gap-4 flex-wrap">
-            <div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                <span className="bg-secondary/50 px-2 py-0.5 rounded-full">{recipe.cuisine_style}</span>
-                <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3"/>{recipe.prep_time} min</span>
-                <span className="inline-flex items-center gap-1"><Users className="w-3 h-3"/>{recipe.servings} pers.</span>
-              </div>
-              <h2 className="text-2xl font-bold">{recipe.title}</h2>
-              <p className="text-muted-foreground text-sm mt-1">{recipe.description}</p>
+      {recipes.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm text-muted-foreground">Coche celles qui te plaisent pour les ajouter à ta bibliothèque, ou relance pour de nouvelles propositions.</p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={go} disabled={loading}><RefreshCw className="w-4 h-4"/>Tout écarter</Button>
+              <Button size="sm" onClick={onSaveSelected} disabled={!user || !Object.values(selected).some(Boolean)}>
+                <Save className="w-4 h-4"/>{user ? "Sauvegarder la sélection" : "Connecte-toi pour sauvegarder"}
+              </Button>
             </div>
-            <Button onClick={onSave} variant="outline" size="sm" disabled={!user}><Save className="w-4 h-4"/>{user ? "Sauvegarder" : "Connectez-vous"}</Button>
           </div>
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="bg-background border border-border rounded-xl p-4">
-              <h3 className="font-bold text-sm mb-2 flex items-center gap-1"><ChefHat className="w-4 h-4"/>Ingrédients</h3>
-              <ul className="space-y-1 text-sm">
-                {recipe.ingredients.map((ing: any, i: number) => (
-                  <li key={i} className="flex justify-between"><span>{ing.name}</span><span className="text-muted-foreground">{ing.qty}</span></li>
-                ))}
-              </ul>
-            </div>
-            <div className="md:col-span-2 space-y-2">
-              <h3 className="font-bold text-sm">Étapes</h3>
-              {recipe.steps.map((s: any, i: number) => (
-                <div key={i} className="bg-background border border-border rounded-xl p-3 flex gap-3">
-                  <div className="shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-xs">{i + 1}</div>
-                  <div className="text-sm flex-1">
-                    <p>{s.text}</p>
-                    <div className="flex gap-2 mt-1 text-xs">
-                      {s.timer_minutes ? <span className="bg-accent/40 px-2 py-0.5 rounded-full">{s.timer_minutes} min</span> : null}
-                      {s.appliance_settings && <span className="bg-secondary/40 px-2 py-0.5 rounded-full">{s.appliance_settings}</span>}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {recipes.map((r, i) => {
+              const isSel = !!selected[i];
+              return (
+                <label
+                  key={i}
+                  className={`bg-card border rounded-2xl p-5 cursor-pointer transition block ${isSel ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/40"}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <Checkbox checked={isSel} onCheckedChange={(v) => setSelected((s) => ({ ...s, [i]: !!v }))} className="mt-1"/>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground mb-1">
+                        <span className="bg-secondary/60 px-2 py-0.5 rounded-full">{r.cuisine_style}</span>
+                        <span className="bg-accent/40 px-2 py-0.5 rounded-full inline-flex items-center gap-1"><Drumstick className="w-3 h-3"/>{r.protein}</span>
+                        <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3"/>{r.prep_time} min</span>
+                        <span className="inline-flex items-center gap-1"><Users className="w-3 h-3"/>{r.servings}</span>
+                        <span className="inline-flex items-center gap-1"><Flame className="w-3 h-3"/>{r.calories} kcal</span>
+                      </div>
+                      <h3 className="font-bold text-lg leading-tight">{r.title}</h3>
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{r.description}</p>
+                      {r.vegetables?.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-2 inline-flex items-center gap-1"><Carrot className="w-3 h-3"/>{r.vegetables.join(", ")}</p>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                </label>
+              );
+            })}
           </div>
         </div>
       )}

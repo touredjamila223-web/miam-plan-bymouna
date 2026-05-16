@@ -13,6 +13,7 @@ import { Route as RecettesRouteImport } from './routes/recettes'
 import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as PlanningRouteImport } from './routes/planning'
 import { Route as MesRecettesRouteImport } from './routes/mes-recettes'
+import { Route as HistoriqueRouteImport } from './routes/historique'
 import { Route as GenererRouteImport } from './routes/generer'
 import { Route as FrigoRouteImport } from './routes/frigo'
 import { Route as CoursesRouteImport } from './routes/courses'
@@ -42,6 +43,11 @@ const PlanningRoute = PlanningRouteImport.update({
 const MesRecettesRoute = MesRecettesRouteImport.update({
   id: '/mes-recettes',
   path: '/mes-recettes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistoriqueRoute = HistoriqueRouteImport.update({
+  id: '/historique',
+  path: '/historique',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GenererRoute = GenererRouteImport.update({
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
+  '/historique': typeof HistoriqueRoute
   '/mes-recettes': typeof MesRecettesRoute
   '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
@@ -119,6 +126,7 @@ export interface FileRoutesByTo {
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
+  '/historique': typeof HistoriqueRoute
   '/mes-recettes': typeof MesRecettesRoute
   '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
@@ -136,6 +144,7 @@ export interface FileRoutesById {
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
+  '/historique': typeof HistoriqueRoute
   '/mes-recettes': typeof MesRecettesRoute
   '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
@@ -154,6 +163,7 @@ export interface FileRouteTypes {
     | '/courses'
     | '/frigo'
     | '/generer'
+    | '/historique'
     | '/mes-recettes'
     | '/planning'
     | '/profil'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
     | '/courses'
     | '/frigo'
     | '/generer'
+    | '/historique'
     | '/mes-recettes'
     | '/planning'
     | '/profil'
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '/courses'
     | '/frigo'
     | '/generer'
+    | '/historique'
     | '/mes-recettes'
     | '/planning'
     | '/profil'
@@ -203,6 +215,7 @@ export interface RootRouteChildren {
   CoursesRoute: typeof CoursesRoute
   FrigoRoute: typeof FrigoRoute
   GenererRoute: typeof GenererRoute
+  HistoriqueRoute: typeof HistoriqueRoute
   MesRecettesRoute: typeof MesRecettesRoute
   PlanningRoute: typeof PlanningRoute
   ProfilRoute: typeof ProfilRoute
@@ -238,6 +251,13 @@ declare module '@tanstack/react-router' {
       path: '/mes-recettes'
       fullPath: '/mes-recettes'
       preLoaderRoute: typeof MesRecettesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/historique': {
+      id: '/historique'
+      path: '/historique'
+      fullPath: '/historique'
+      preLoaderRoute: typeof HistoriqueRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/generer': {
@@ -335,6 +355,7 @@ const rootRouteChildren: RootRouteChildren = {
   CoursesRoute: CoursesRoute,
   FrigoRoute: FrigoRoute,
   GenererRoute: GenererRoute,
+  HistoriqueRoute: HistoriqueRoute,
   MesRecettesRoute: MesRecettesRoute,
   PlanningRoute: PlanningRoute,
   ProfilRoute: ProfilRoute,
@@ -344,3 +365,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

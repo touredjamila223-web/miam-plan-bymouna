@@ -33,7 +33,7 @@ Restrictions alimentaires : ${prefs2}.`;
         const result = streamText({
           model: gateway("google/gemini-3-flash-preview"),
           system: `Tu es MiamPlan, un assistant culinaire chaleureux et expert. Tu aides la famille à cuisiner sainement, à gagner du temps avec le batch cooking, et à se faire plaisir. Tu donnes des conseils précis, des recettes cohérentes (jamais d'associations bancales), et tu adaptes selon les appareils et préférences de la famille. Réponds toujours en français de manière concise et conviviale.${ctxBlock}`,
-          messages: convertToModelMessages(messages),
+          messages: await convertToModelMessages(messages),
         });
         return result.toUIMessageStreamResponse();
       },

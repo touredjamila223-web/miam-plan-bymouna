@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { listRecipes } from "@/lib/recipes.functions";
+import { listRecipes, listMyRecipes } from "@/lib/recipes.functions";
+import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,22 +25,31 @@ const TIME_OPTIONS = [
 
 function Recettes() {
   const list = useServerFn(listRecipes);
+  const listMine = useServerFn(listMyRecipes);
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [protein, setProtein] = useState<string>("");
   const [cuisine, setCuisine] = useState<string>("");
   const [maxTime, setMaxTime] = useState<string>("0");
 
+  const params = {
+    search: search || undefined,
+    protein: protein || undefined,
+    cuisine: cuisine || undefined,
+    maxTime: maxTime && maxTime !== "0" ? Number(maxTime) : undefined,
+  };
   const { data } = useQuery({
-    queryKey: ["recipes", search, protein, cuisine, maxTime],
-    queryFn: () =>
-      list({
-        data: {
-          search: search || undefined,
-          protein: protein || undefined,
-          cuisine: cuisine || undefined,
-          maxTime: maxTime && maxTime !== "0" ? Number(maxTime) : undefined,
-        },
-      }),
+    queryKey: ["recipes", search, protein, cuisine, maxTime, !!user],
+    queryFn: async () => {
+      const seed = await list({ data: params });
+      if (!user) return seed;
+      try {
+        const mine = await listMine({ data: params });
+        return [...mine, ...seed];
+      } catch {
+        return seed;
+      }
+    },
   });
 
   const hasFilters = protein || cuisine || (maxTime && maxTime !== "0");

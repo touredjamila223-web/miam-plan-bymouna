@@ -122,6 +122,118 @@ const saveSchema = recipeSchema.extend({
   source: z.string().default("ai"),
 });
 
+const batchSchema = z.object({ recipes: z.array(recipeSchema).length(4) });
+
+const batchInput = z.object({
+  appliance: z.string().min(2).max(50),
+  servings: z.number().int().min(1).max(20).optional(),
+  restrictions: z.array(z.string()).max(20).optional(),
+  exclude: z.array(z.string()).max(40).optional(),
+  hint: z.string().max(300).optional(),
+});
+
+function buildBatchPrompt(exclude: string[], hint?: string) {
+  return `Propose 4 recettes VARIÉES et savoureuses pour le repas familial.
+Contraintes :
+- Chaque recette doit avoir une identité culinaire claire et différente des autres autant que possible (varie les styles : ex. un français, un asiatique, un méditerranéen, un oriental).
+- PROTÉINES : pas plus de 2 recettes avec la même protéine principale parmi les 4. Varie au maximum.
+- Chaque recette doit être cohérente : protéine + légumes + sauce + épices + accompagnement forment un ensemble harmonieux.
+- Évite ces titres déjà vus : ${exclude.length ? exclude.join(", ") : "aucun"}.
+${hint ? `- Préférence utilisateur : ${hint}` : ""}
+Réponds avec un objet { recipes: [4 recettes complètes] }.`;
+}
+
+async function generateBatchOnce(opts: {
+  apiKey: string;
+  appliance: string;
+  restrictions: string[];
+  servings: number;
+  family_name: string | null;
+  exclude: string[];
+  hint?: string;
+}) {
+  const gateway = createLovableAiGatewayProvider(opts.apiKey);
+  const model = gateway("google/gemini-3-flash-preview");
+  const { experimental_output } = await generateText({
+    model,
+    system: buildSystemPrompt({
+      appliance: opts.appliance,
+      restrictions: opts.restrictions,
+      servings: opts.servings,
+      family_name: opts.family_name,
+    }),
+    prompt: buildBatchPrompt(opts.exclude, opts.hint),
+    experimental_output: Output.object({ schema: batchSchema }),
+  });
+  // Enforce max 2 same protein (post-check, regenerate offenders deterministically by trimming)
+  const counts: Record<string, number> = {};
+  const kept: typeof experimental_output.recipes = [];
+  for (const r of experimental_output.recipes) {
+    const p = (r.protein ?? "").toLowerCase().trim();
+    counts[p] = (counts[p] ?? 0) + 1;
+    if (counts[p] <= 2) kept.push(r);
+  }
+  return kept;
+}
+
+export const generateRecipeBatch = createServerFn({ method: "POST" })
+  .inputValidator((input) => batchInput.parse(input))
+  .handler(async ({ data }) => {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("Clé Lovable AI manquante");
+
+    let restrictions = data.restrictions ?? [];
+    let servings = data.servings ?? 4;
+    let family_name: string | null = null;
+
+    // If authenticated, enrich with profile/prefs
+    try {
+      const authHeader = (globalThis as any).process?.env ? null : null;
+      // Skipped here — public-callable; profile context handled in chat/other fns
+    } catch {}
+
+    const exclude = data.exclude ?? [];
+    let kept = await generateBatchOnce({
+      apiKey,
+      appliance: data.appliance,
+      restrictions,
+      servings,
+      family_name,
+      exclude,
+      hint: data.hint,
+    });
+    // Top up if filter removed some
+    let safety = 0;
+    while (kept.length < 4 && safety < 2) {
+      const more = await generateBatchOnce({
+        apiKey,
+        appliance: data.appliance,
+        restrictions,
+        servings,
+        family_name,
+        exclude: [...exclude, ...kept.map((r) => r.title)],
+        hint: data.hint,
+      });
+      for (const r of more) {
+        if (kept.length >= 4) break;
+        kept.push(r);
+      }
+      safety += 1;
+    }
+    return kept.slice(0, 4);
+  });
+
+export const saveRecipes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ recipes: z.array(saveSchema).min(1).max(10) }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const rows = data.recipes.map((r) => ({ ...r, owner_id: userId, source: "ai" }));
+    const { data: inserted, error } = await supabase.from("recipes").insert(rows).select();
+    if (error) throw new Error(error.message);
+    return inserted;
+  });
+
 export const saveRecipe = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => saveSchema.parse(input))

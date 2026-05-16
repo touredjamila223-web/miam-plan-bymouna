@@ -136,7 +136,7 @@ export const listRecipes = createServerFn({ method: "GET" })
     let query = supabaseAdmin
       .from("recipes")
       .select("id, title, photo_url, cuisine_style, difficulty, prep_time, source, description")
-      .or("source.eq.seed")
+      .eq("source", "seed")
       .order("created_at", { ascending: false })
       .limit(60);
     if (data?.search) query = query.ilike("title", `%${data.search}%`);

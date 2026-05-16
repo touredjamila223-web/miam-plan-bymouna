@@ -9,13 +9,55 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RecettesRouteImport } from './routes/recettes'
+import { Route as ProfilRouteImport } from './routes/profil'
+import { Route as MesRecettesRouteImport } from './routes/mes-recettes'
+import { Route as GenererRouteImport } from './routes/generer'
+import { Route as ChatRouteImport } from './routes/chat'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RecettesIdRouteImport } from './routes/recettes.$id'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 
+const RecettesRoute = RecettesRouteImport.update({
+  id: '/recettes',
+  path: '/recettes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfilRoute = ProfilRouteImport.update({
+  id: '/profil',
+  path: '/profil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MesRecettesRoute = MesRecettesRouteImport.update({
+  id: '/mes-recettes',
+  path: '/mes-recettes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GenererRoute = GenererRouteImport.update({
+  id: '/generer',
+  path: '/generer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const RecettesIdRoute = RecettesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => RecettesRoute,
 } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
@@ -25,38 +67,142 @@ const ApiChatRoute = ApiChatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/chat': typeof ChatRoute
+  '/generer': typeof GenererRoute
+  '/mes-recettes': typeof MesRecettesRoute
+  '/profil': typeof ProfilRoute
+  '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
+  '/recettes/$id': typeof RecettesIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/chat': typeof ChatRoute
+  '/generer': typeof GenererRoute
+  '/mes-recettes': typeof MesRecettesRoute
+  '/profil': typeof ProfilRoute
+  '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
+  '/recettes/$id': typeof RecettesIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/chat': typeof ChatRoute
+  '/generer': typeof GenererRoute
+  '/mes-recettes': typeof MesRecettesRoute
+  '/profil': typeof ProfilRoute
+  '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
+  '/recettes/$id': typeof RecettesIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/chat'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/generer'
+    | '/mes-recettes'
+    | '/profil'
+    | '/recettes'
+    | '/api/chat'
+    | '/recettes/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/chat'
-  id: '__root__' | '/' | '/api/chat'
+  to:
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/generer'
+    | '/mes-recettes'
+    | '/profil'
+    | '/recettes'
+    | '/api/chat'
+    | '/recettes/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/generer'
+    | '/mes-recettes'
+    | '/profil'
+    | '/recettes'
+    | '/api/chat'
+    | '/recettes/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
+  ChatRoute: typeof ChatRoute
+  GenererRoute: typeof GenererRoute
+  MesRecettesRoute: typeof MesRecettesRoute
+  ProfilRoute: typeof ProfilRoute
+  RecettesRoute: typeof RecettesRouteWithChildren
   ApiChatRoute: typeof ApiChatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/recettes': {
+      id: '/recettes'
+      path: '/recettes'
+      fullPath: '/recettes'
+      preLoaderRoute: typeof RecettesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profil': {
+      id: '/profil'
+      path: '/profil'
+      fullPath: '/profil'
+      preLoaderRoute: typeof ProfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mes-recettes': {
+      id: '/mes-recettes'
+      path: '/mes-recettes'
+      fullPath: '/mes-recettes'
+      preLoaderRoute: typeof MesRecettesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/generer': {
+      id: '/generer'
+      path: '/generer'
+      fullPath: '/generer'
+      preLoaderRoute: typeof GenererRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/recettes/$id': {
+      id: '/recettes/$id'
+      path: '/$id'
+      fullPath: '/recettes/$id'
+      preLoaderRoute: typeof RecettesIdRouteImport
+      parentRoute: typeof RecettesRoute
     }
     '/api/chat': {
       id: '/api/chat'
@@ -68,8 +214,26 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface RecettesRouteChildren {
+  RecettesIdRoute: typeof RecettesIdRoute
+}
+
+const RecettesRouteChildren: RecettesRouteChildren = {
+  RecettesIdRoute: RecettesIdRoute,
+}
+
+const RecettesRouteWithChildren = RecettesRoute._addFileChildren(
+  RecettesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
+  ChatRoute: ChatRoute,
+  GenererRoute: GenererRoute,
+  MesRecettesRoute: MesRecettesRoute,
+  ProfilRoute: ProfilRoute,
+  RecettesRoute: RecettesRouteWithChildren,
   ApiChatRoute: ApiChatRoute,
 }
 export const routeTree = rootRouteImport

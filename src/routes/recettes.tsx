@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PROTEINS, CUISINE_STYLES } from "@/lib/constants";
 import { ChefHat, Search, Clock, Drumstick, Flame, Carrot, X, Sparkles } from "lucide-react";
-import { Link as RouterLink } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/recettes")({
   head: () => ({ meta: [{ title: "Bibliothèque de recettes — MiamPlan" }] }),
@@ -111,13 +110,13 @@ function Recettes() {
         {!user && (
           <div className="col-span-full text-center py-12 space-y-3">
             <p className="text-muted-foreground">Connecte-toi pour démarrer ta bibliothèque familiale.</p>
-            <RouterLink to="/auth" className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-medium">Se connecter</RouterLink>
+            <Link to="/auth" className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-medium">Se connecter</Link>
           </div>
         )}
         {user && data && data.length === 0 && (
           <div className="col-span-full text-center py-12 space-y-3">
             <p className="text-muted-foreground">Ta bibliothèque est encore vide. Génère tes premières recettes et sauvegarde celles qui te plaisent.</p>
-            <RouterLink to="/generer" className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-medium"><Sparkles className="w-4 h-4"/>Générer des recettes</RouterLink>
+            <Link to="/generer" className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-medium"><Sparkles className="w-4 h-4"/>Générer des recettes</Link>
           </div>
         )}
       </div>

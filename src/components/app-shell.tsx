@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Home, BookOpen, Refrigerator, CalendarDays, User, MessageCircle, Sparkles, Heart, ShoppingCart, Layers } from "lucide-react";
+import { Home, BookOpen, Refrigerator, CalendarDays, User, MessageCircle, Sparkles, Heart, ShoppingCart, Layers, History } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 
@@ -20,6 +20,7 @@ const DESKTOP_NAV = [
   { to: "/courses", label: "Courses", icon: ShoppingCart },
   { to: "/batch", label: "Batch cooking", icon: Layers },
   { to: "/mes-recettes", label: "Favoris", icon: Heart },
+  { to: "/historique", label: "Historique", icon: History },
   { to: "/profil", label: "Profil", icon: User },
 ] as const;
 

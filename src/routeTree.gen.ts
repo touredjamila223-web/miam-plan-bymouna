@@ -13,6 +13,7 @@ import { Route as RecettesRouteImport } from './routes/recettes'
 import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as PlanningRouteImport } from './routes/planning'
 import { Route as MesRecettesRouteImport } from './routes/mes-recettes'
+import { Route as HistoriqueRouteImport } from './routes/historique'
 import { Route as GenererRouteImport } from './routes/generer'
 import { Route as FrigoRouteImport } from './routes/frigo'
 import { Route as CoursesRouteImport } from './routes/courses'
@@ -22,6 +23,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RecettesIdRouteImport } from './routes/recettes.$id'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as RecettesCuisineRouteImport } from './routes/recettes.cuisine.'
 
 const RecettesRoute = RecettesRouteImport.update({
   id: '/recettes',
@@ -41,6 +43,11 @@ const PlanningRoute = PlanningRouteImport.update({
 const MesRecettesRoute = MesRecettesRouteImport.update({
   id: '/mes-recettes',
   path: '/mes-recettes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistoriqueRoute = HistoriqueRouteImport.update({
+  id: '/historique',
+  path: '/historique',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GenererRoute = GenererRouteImport.update({
@@ -88,6 +95,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RecettesCuisineRoute = RecettesCuisineRouteImport.update({
+  id: '/cuisine/',
+  path: '/cuisine/',
+  getParentRoute: () => RecettesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -97,12 +109,14 @@ export interface FileRoutesByFullPath {
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
+  '/historique': typeof HistoriqueRoute
   '/mes-recettes': typeof MesRecettesRoute
   '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
   '/recettes/$id': typeof RecettesIdRoute
+  '/recettes/cuisine/': typeof RecettesCuisineRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -112,12 +126,14 @@ export interface FileRoutesByTo {
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
+  '/historique': typeof HistoriqueRoute
   '/mes-recettes': typeof MesRecettesRoute
   '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
   '/recettes/$id': typeof RecettesIdRoute
+  '/recettes/cuisine': typeof RecettesCuisineRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -128,12 +144,14 @@ export interface FileRoutesById {
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
+  '/historique': typeof HistoriqueRoute
   '/mes-recettes': typeof MesRecettesRoute
   '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
   '/recettes/$id': typeof RecettesIdRoute
+  '/recettes/cuisine/': typeof RecettesCuisineRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -145,12 +163,14 @@ export interface FileRouteTypes {
     | '/courses'
     | '/frigo'
     | '/generer'
+    | '/historique'
     | '/mes-recettes'
     | '/planning'
     | '/profil'
     | '/recettes'
     | '/api/chat'
     | '/recettes/$id'
+    | '/recettes/cuisine/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -160,12 +180,14 @@ export interface FileRouteTypes {
     | '/courses'
     | '/frigo'
     | '/generer'
+    | '/historique'
     | '/mes-recettes'
     | '/planning'
     | '/profil'
     | '/recettes'
     | '/api/chat'
     | '/recettes/$id'
+    | '/recettes/cuisine'
   id:
     | '__root__'
     | '/'
@@ -175,12 +197,14 @@ export interface FileRouteTypes {
     | '/courses'
     | '/frigo'
     | '/generer'
+    | '/historique'
     | '/mes-recettes'
     | '/planning'
     | '/profil'
     | '/recettes'
     | '/api/chat'
     | '/recettes/$id'
+    | '/recettes/cuisine/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -191,6 +215,7 @@ export interface RootRouteChildren {
   CoursesRoute: typeof CoursesRoute
   FrigoRoute: typeof FrigoRoute
   GenererRoute: typeof GenererRoute
+  HistoriqueRoute: typeof HistoriqueRoute
   MesRecettesRoute: typeof MesRecettesRoute
   PlanningRoute: typeof PlanningRoute
   ProfilRoute: typeof ProfilRoute
@@ -226,6 +251,13 @@ declare module '@tanstack/react-router' {
       path: '/mes-recettes'
       fullPath: '/mes-recettes'
       preLoaderRoute: typeof MesRecettesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/historique': {
+      id: '/historique'
+      path: '/historique'
+      fullPath: '/historique'
+      preLoaderRoute: typeof HistoriqueRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/generer': {
@@ -291,15 +323,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/recettes/cuisine/': {
+      id: '/recettes/cuisine/'
+      path: '/cuisine'
+      fullPath: '/recettes/cuisine/'
+      preLoaderRoute: typeof RecettesCuisineRouteImport
+      parentRoute: typeof RecettesRoute
+    }
   }
 }
 
 interface RecettesRouteChildren {
   RecettesIdRoute: typeof RecettesIdRoute
+  RecettesCuisineRoute: typeof RecettesCuisineRoute
 }
 
 const RecettesRouteChildren: RecettesRouteChildren = {
   RecettesIdRoute: RecettesIdRoute,
+  RecettesCuisineRoute: RecettesCuisineRoute,
 }
 
 const RecettesRouteWithChildren = RecettesRoute._addFileChildren(
@@ -314,6 +355,7 @@ const rootRouteChildren: RootRouteChildren = {
   CoursesRoute: CoursesRoute,
   FrigoRoute: FrigoRoute,
   GenererRoute: GenererRoute,
+  HistoriqueRoute: HistoriqueRoute,
   MesRecettesRoute: MesRecettesRoute,
   PlanningRoute: PlanningRoute,
   ProfilRoute: ProfilRoute,

@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getRecipe, toggleFavorite } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Heart, Clock, Users, ChefHat, ArrowLeft } from "lucide-react";
+import { Heart, Clock, Users, ChefHat, ArrowLeft, Play } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/recettes/$id")({
@@ -50,6 +50,9 @@ function RecipeDetail() {
       </div>
 
       <div className="flex gap-3">
+        <Link to="/recettes/cuisine/$id" params={{ id }} className="bg-primary text-primary-foreground px-5 py-2.5 rounded-full font-medium inline-flex items-center gap-2 hover:opacity-90">
+          <Play className="w-4 h-4"/> Mode cuisine
+        </Link>
         {user && (
           <Button variant="outline" onClick={() => favMut.mutate()} disabled={favMut.isPending}>
             <Heart className="w-4 h-4"/> Favori

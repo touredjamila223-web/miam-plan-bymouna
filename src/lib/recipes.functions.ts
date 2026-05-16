@@ -137,15 +137,23 @@ export const saveRecipe = createServerFn({ method: "POST" })
   });
 
 export const listRecipes = createServerFn({ method: "GET" })
-  .inputValidator((input: { search?: string } | undefined) => input ?? {})
+  .inputValidator(
+    (input: { search?: string; protein?: string; cuisine?: string; maxTime?: number } | undefined) =>
+      input ?? {},
+  )
   .handler(async ({ data }) => {
     let query = supabaseAdmin
       .from("recipes")
-      .select("id, title, photo_url, cuisine_style, difficulty, prep_time, source, description")
+      .select(
+        "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories",
+      )
       .eq("source", "seed")
       .order("created_at", { ascending: false })
       .limit(60);
     if (data?.search) query = query.ilike("title", `%${data.search}%`);
+    if (data?.protein) query = query.eq("protein", data.protein);
+    if (data?.cuisine) query = query.eq("cuisine_style", data.cuisine);
+    if (data?.maxTime) query = query.lte("prep_time", data.maxTime);
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
     return rows ?? [];

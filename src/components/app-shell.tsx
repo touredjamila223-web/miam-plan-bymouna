@@ -1,15 +1,27 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Home, BookOpen, Sparkles, Heart, User, MessageCircle } from "lucide-react";
+import { Home, BookOpen, Refrigerator, CalendarDays, User, MessageCircle, Sparkles, Heart, ShoppingCart, Layers } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 
-const NAV = [
+const MOBILE_NAV = [
   { to: "/", label: "Accueil", icon: Home },
   { to: "/recettes", label: "Recettes", icon: BookOpen },
+  { to: "/frigo", label: "Frigo", icon: Refrigerator },
+  { to: "/planning", label: "Planning", icon: CalendarDays },
+  { to: "/profil", label: "Profil", icon: User },
+] as const;
+
+const DESKTOP_NAV = [
+  { to: "/", label: "Accueil", icon: Home },
+  { to: "/recettes", label: "Bibliothèque", icon: BookOpen },
   { to: "/generer", label: "Générer", icon: Sparkles },
+  { to: "/frigo", label: "Mon frigo", icon: Refrigerator },
+  { to: "/planning", label: "Planning", icon: CalendarDays },
+  { to: "/courses", label: "Courses", icon: ShoppingCart },
+  { to: "/batch", label: "Batch cooking", icon: Layers },
   { to: "/mes-recettes", label: "Favoris", icon: Heart },
   { to: "/profil", label: "Profil", icon: User },
-];
+] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -28,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-60 bg-sidebar border-r border-sidebar-border flex-col p-4">
         <Link to="/" className="text-2xl font-bold text-primary mb-8 px-2" style={{ fontFamily: 'Fraunces, serif' }}>MiamPlan</Link>
         <nav className="flex flex-col gap-1">
-          {NAV.map((n) => (
+          {DESKTOP_NAV.map((n) => (
             <Link key={n.to} to={n.to} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition" activeProps={{ className: "bg-sidebar-accent text-sidebar-primary font-medium" }}>
               <n.icon className="w-5 h-5" />{n.label}
             </Link>
@@ -43,7 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border flex justify-around py-2 z-40">
-        {NAV.map((n) => (
+        {MOBILE_NAV.map((n) => (
           <Link key={n.to} to={n.to} className="flex flex-col items-center gap-1 px-2 py-1 text-xs" activeProps={{ className: "text-primary" }}>
             <n.icon className="w-5 h-5" />{n.label}
           </Link>

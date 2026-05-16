@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getRecipe, toggleFavorite } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Heart, Clock, Users, ChefHat, ArrowLeft, Play } from "lucide-react";
+import { Heart, Clock, Users, ChefHat, ArrowLeft, Play, Flame, Drumstick, Carrot } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/recettes/$id")({
@@ -40,13 +40,18 @@ function RecipeDetail() {
       <div>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mb-2">
           <span className="bg-secondary/50 px-2 py-1 rounded-full text-xs">{r.cuisine_style}</span>
+          {r.protein && <span className="bg-accent/40 px-2 py-1 rounded-full text-xs inline-flex items-center gap-1"><Drumstick className="w-3 h-3"/>{r.protein}</span>}
           <span className="inline-flex items-center gap-1"><Clock className="w-4 h-4"/>{r.prep_time} min</span>
           <span className="inline-flex items-center gap-1"><Users className="w-4 h-4"/>{r.servings} pers.</span>
+          {r.calories != null && <span className="inline-flex items-center gap-1"><Flame className="w-4 h-4"/>{r.calories} kcal</span>}
           <span className="capitalize">• {r.difficulty}</span>
           {r.appliance && <span>• {r.appliance}</span>}
         </div>
         <h1 className="text-3xl md:text-4xl font-bold mb-2">{r.title}</h1>
         {r.description && <p className="text-muted-foreground">{r.description}</p>}
+        {r.vegetables && (r.vegetables as string[]).length > 0 && (
+          <p className="text-sm text-muted-foreground mt-2 inline-flex items-center gap-1"><Carrot className="w-4 h-4"/>Légumes : {(r.vegetables as string[]).join(", ")}</p>
+        )}
       </div>
 
       <div className="flex gap-3">

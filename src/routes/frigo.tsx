@@ -120,7 +120,7 @@ function FrigoPage() {
                     <p className="text-xs text-muted-foreground mt-2"><span className="font-medium">À acheter :</span> {s.missing_ingredients.join(", ")}</p>
                   )}
                 </div>
-                <Link to="/generer" search={{ prompt: s.title } as any} className="text-xs text-primary hover:underline whitespace-nowrap">Cuisiner →</Link>
+                <Link to="/generer" className="text-xs text-primary hover:underline whitespace-nowrap">Cuisiner →</Link>
               </div>
             </div>
           ))}

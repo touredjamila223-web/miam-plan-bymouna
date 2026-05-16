@@ -69,7 +69,7 @@ function normalizeRecipe(raw: unknown) {
   };
 }
 
-const recipeSchema = z.preprocess(normalizeRecipe, z.object({
+const recipeBaseSchema = z.object({
   title: z.string(),
   description: z.string(),
   cuisine_style: z.string(),
@@ -90,7 +90,11 @@ const recipeSchema = z.preprocess(normalizeRecipe, z.object({
       }),
     )
     .min(2),
-}));
+});
+
+type RecipeDto = z.infer<typeof recipeBaseSchema>;
+
+const recipeSchema: z.ZodType<RecipeDto> = z.preprocess(normalizeRecipe, recipeBaseSchema);
 
 function buildSystemPrompt(ctx: {
   appliance: string;
@@ -179,7 +183,7 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
     });
   });
 
-const saveSchema = recipeSchema.extend({
+const saveSchema = recipeBaseSchema.extend({
   photo_url: z.string().optional(),
   source: z.string().default("ai"),
 });

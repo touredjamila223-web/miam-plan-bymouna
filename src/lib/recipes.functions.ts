@@ -271,6 +271,31 @@ export const listRecipes = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+export const listMyRecipes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: { search?: string; protein?: string; cuisine?: string; maxTime?: number } | undefined) =>
+      input ?? {},
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    let query = supabase
+      .from("recipes")
+      .select(
+        "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories",
+      )
+      .eq("owner_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(120);
+    if (data?.search) query = query.ilike("title", `%${data.search}%`);
+    if (data?.protein) query = query.eq("protein", data.protein);
+    if (data?.cuisine) query = query.eq("cuisine_style", data.cuisine);
+    if (data?.maxTime) query = query.lte("prep_time", data.maxTime);
+    const { data: rows, error } = await query;
+    if (error) throw new Error(error.message);
+    return rows ?? [];
+  });
+
 export const getRecipe = createServerFn({ method: "GET" })
   .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {

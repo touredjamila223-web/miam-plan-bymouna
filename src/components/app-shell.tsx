@@ -1,0 +1,59 @@
+import { Link, useLocation } from "@tanstack/react-router";
+import { Home, BookOpen, Sparkles, Heart, User, MessageCircle } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
+
+const NAV = [
+  { to: "/", label: "Accueil", icon: Home },
+  { to: "/recettes", label: "Recettes", icon: BookOpen },
+  { to: "/generer", label: "Générer", icon: Sparkles },
+  { to: "/mes-recettes", label: "Favoris", icon: Heart },
+  { to: "/profil", label: "Profil", icon: User },
+];
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  const hideOnAuth = location.pathname === "/auth";
+
+  return (
+    <div className="min-h-screen bg-background text-foreground pb-20 md:pb-0 md:pl-60">
+      {!loading && !user && !hideOnAuth && (
+        <div className="bg-accent text-accent-foreground px-4 py-2 text-sm text-center">
+          Mode invité — <Link to="/auth" className="underline font-medium">connectez-vous</Link> pour sauvegarder vos données.
+        </div>
+      )}
+
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-60 bg-sidebar border-r border-sidebar-border flex-col p-4">
+        <Link to="/" className="text-2xl font-bold text-primary mb-8 px-2" style={{ fontFamily: 'Fraunces, serif' }}>MiamPlan</Link>
+        <nav className="flex flex-col gap-1">
+          {NAV.map((n) => (
+            <Link key={n.to} to={n.to} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition" activeProps={{ className: "bg-sidebar-accent text-sidebar-primary font-medium" }}>
+              <n.icon className="w-5 h-5" />{n.label}
+            </Link>
+          ))}
+          <Link to="/chat" className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition" activeProps={{ className: "bg-sidebar-accent text-sidebar-primary font-medium" }}>
+            <MessageCircle className="w-5 h-5" />Chat IA
+          </Link>
+        </nav>
+      </aside>
+
+      <main className="max-w-5xl mx-auto px-4 py-6">{children}</main>
+
+      {/* Mobile bottom nav */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border flex justify-around py-2 z-40">
+        {NAV.map((n) => (
+          <Link key={n.to} to={n.to} className="flex flex-col items-center gap-1 px-2 py-1 text-xs" activeProps={{ className: "text-primary" }}>
+            <n.icon className="w-5 h-5" />{n.label}
+          </Link>
+        ))}
+      </nav>
+
+      {/* Floating chat */}
+      <Link to="/chat" className="fixed bottom-24 md:bottom-6 right-6 bg-primary text-primary-foreground rounded-full p-4 shadow-lg hover:scale-105 transition z-30" aria-label="Chat IA">
+        <MessageCircle className="w-6 h-6" />
+      </Link>
+    </div>
+  );
+}

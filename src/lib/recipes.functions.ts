@@ -3,7 +3,41 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
-import { generateObject } from "ai";
+import { generateText } from "ai";
+
+
+function extractJsonObject(text: string) {
+  const cleaned = text.replace(/```json|```/gi, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("Réponse IA invalide : aucun JSON détecté");
+  }
+  return JSON.parse(cleaned.slice(start, end + 1));
+}
+
+async function generateJson<T>(opts: {
+  model: any;
+  system: string;
+  prompt: string;
+  schema: z.ZodType<T>;
+  maxOutputTokens?: number;
+}) {
+  const { text } = await generateText({
+    model: opts.model,
+    system: `${opts.system}\n\nRéponds uniquement avec du JSON valide, sans Markdown, sans commentaire, sans texte avant ou après.`,
+    prompt: opts.prompt,
+    temperature: 0.8,
+    maxOutputTokens: opts.maxOutputTokens ?? 6000,
+  });
+
+  try {
+    return opts.schema.parse(extractJsonObject(text));
+  } catch (error) {
+    console.error("Invalid AI JSON", { error, text: text.slice(0, 1200) });
+    throw new Error("L'IA a renvoyé une recette mal formée. Relance la génération.");
+  }
+}
 
 const recipeSchema = z.object({
   title: z.string(),
@@ -84,13 +118,12 @@ export const generateRecipe = createServerFn({ method: "POST" })
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
 
-    const { object } = await generateObject({
+    return generateJson({
       model,
       system: buildSystemPrompt({ appliance: data.appliance, restrictions, servings, family_name }),
       prompt: `Génère une recette complète pour : ${data.prompt}`,
       schema: recipeSchema,
     });
-    return object;
   });
 
 // Public — generate without account (guest mode)
@@ -103,7 +136,7 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
     if (!apiKey) throw new Error("Clé Lovable AI manquante");
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
-    const { object } = await generateObject({
+    return generateJson({
       model,
       system: buildSystemPrompt({
         appliance: data.appliance,
@@ -114,7 +147,6 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
       prompt: `Génère une recette complète pour : ${data.prompt}`,
       schema: recipeSchema,
     });
-    return object;
   });
 
 const saveSchema = recipeSchema.extend({
@@ -154,7 +186,7 @@ async function generateBatchOnce(opts: {
 }) {
   const gateway = createLovableAiGatewayProvider(opts.apiKey);
   const model = gateway("google/gemini-3-flash-preview");
-  const { object } = await generateObject({
+  const object = await generateJson({
     model,
     system: buildSystemPrompt({
       appliance: opts.appliance,
@@ -164,6 +196,7 @@ async function generateBatchOnce(opts: {
     }),
     prompt: buildBatchPrompt(opts.exclude, opts.hint),
     schema: batchSchema,
+    maxOutputTokens: 9000,
   });
   // Enforce max 2 same protein (post-check, deterministic trim)
   const counts: Record<string, number> = {};

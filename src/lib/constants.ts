@@ -36,6 +36,20 @@ export const CUISINE_STYLES = [
   "libanais",
 ] as const;
 
+export const PROTEINS = [
+  "poulet",
+  "boeuf",
+  "agneau",
+  "porc",
+  "poisson",
+  "fruits de mer",
+  "oeufs",
+  "tofu",
+  "légumineuses",
+  "fromage",
+  "végétarien",
+] as const;
+
 export type AppRecipe = {
   id?: string;
   title: string;

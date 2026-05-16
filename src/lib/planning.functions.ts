@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
-import { generateText, Output } from "ai";
+import { generateObject } from "ai";
 
 // ============== FRIDGE ==============
 
@@ -81,7 +81,7 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
-    const { experimental_output } = await generateText({
+    const { object } = await generateObject({
       model,
       system: `Tu es un chef qui propose 3 a 5 recettes COHERENTES realisables avec les ingredients du frigo de la famille.
 Regles : identite culinaire claire (francais/italien/oriental/asiatique/mediterraneen/tex-mex/indien/libanais), accords logiques entre proteine, legumes, sauce et accompagnement.
@@ -90,9 +90,9 @@ Appareils disponibles : ${appliances}.
 Portions : ${servings}.
 Indique pour chaque suggestion les ingredients MANQUANTS a acheter (peu si possible).`,
       prompt: `Frigo : ${items.join(", ")}.`,
-      experimental_output: Output.object({ schema: suggestionsSchema }),
+      schema: suggestionsSchema,
     });
-    return experimental_output.suggestions;
+    return object.suggestions;
   });
 
 // ============== MEAL PLAN ==============
@@ -293,15 +293,15 @@ export const generateShoppingFromPlan = createServerFn({ method: "POST" })
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
-    const { experimental_output } = await generateText({
+    const { object } = await generateObject({
       model,
       system: `Tu consolides une liste de courses a partir des recettes prevues. Additionne les quantites identiques, regroupe par categorie de rayon, retire ce qui est deja dans le frigo.`,
       prompt: `Frigo dispo : ${fridgeStr}.\n\nRecettes prevues :\n${recipes}`,
-      experimental_output: Output.object({ schema: shoppingGenSchema }),
+      schema: shoppingGenSchema,
     });
 
     await supabase.from("shopping_list").delete().eq("user_id", userId).eq("source", "plan");
-    const rows = experimental_output.items.map((i) => ({
+    const rows = object.items.map((i) => ({
       user_id: userId,
       item: i.item,
       qty: i.qty,
@@ -309,7 +309,7 @@ export const generateShoppingFromPlan = createServerFn({ method: "POST" })
       source: "plan",
     }));
     if (rows.length) await supabase.from("shopping_list").insert(rows);
-    return experimental_output.items;
+    return object.items;
   });
 
 // ============== BATCH COOKING ==============
@@ -348,7 +348,7 @@ export const generateBatch = createServerFn({ method: "POST" })
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
-    const { experimental_output } = await generateText({
+    const { object } = await generateObject({
       model,
       system: `Tu concois une session de batch cooking dominicale de 2-3h pour preparer 5 repas de semaine pour ${servings} personnes.
 Regles :
@@ -357,7 +357,7 @@ Regles :
 - Chaque repas final doit avoir une identite culinaire (francais/italien/oriental/asiatique/mediterraneen) coherente et juste 5-10 min de finition en semaine
 - Respecter ABSOLUMENT : ${restrictions.join(", ") || "aucune restriction"}`,
       prompt: `Genere une session batch cooking complete pour la semaine.`,
-      experimental_output: Output.object({ schema: batchSchema }),
+      schema: batchSchema,
     });
-    return experimental_output;
+    return object;
   });

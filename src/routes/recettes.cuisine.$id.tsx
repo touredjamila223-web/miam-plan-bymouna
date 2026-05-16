@@ -8,7 +8,7 @@ import { recordCooked } from "@/lib/cooking.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { ChevronLeft, ChevronRight, X, Play, Pause, RotateCcw, Star, Heart, Check } from "lucide-react";
 
-export const Route = createFileRoute("/recettes/cuisine/")({
+export const Route = createFileRoute("/recettes/cuisine/$id")({
   head: () => ({ meta: [{ title: "Mode cuisine — MiamPlan" }] }),
   component: CookingMode,
 });

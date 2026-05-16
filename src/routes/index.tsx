@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listRecipes } from "@/lib/recipes.functions";
+import { listMyRecipes } from "@/lib/recipes.functions";
+import { useAuth } from "@/hooks/use-auth";
 import { Sparkles, Refrigerator, CalendarDays, BookOpen, ChefHat } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -22,8 +23,13 @@ const SHORTCUTS = [
 ] as const;
 
 function Home() {
-  const list = useServerFn(listRecipes);
-  const { data: recipes } = useQuery({ queryKey: ["recipes", "seed"], queryFn: () => list({ data: {} }) });
+  const { user } = useAuth();
+  const listMine = useServerFn(listMyRecipes);
+  const { data: recipes } = useQuery({
+    queryKey: ["recipes", "mine", !!user],
+    enabled: !!user,
+    queryFn: () => listMine({ data: {} }),
+  });
 
   return (
     <div className="space-y-10">
@@ -58,7 +64,7 @@ function Home() {
           <Link to="/recettes" className="text-sm text-primary hover:underline">Tout voir →</Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {(recipes ?? []).slice(0, 6).map((r) => (
+          {(recipes ?? []).slice(0, 6).map((r: any) => (
             <Link key={r.id} to="/recettes/$id" params={{ id: r.id }} className="bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition">
               <div className="aspect-[4/3] bg-gradient-to-br from-accent/40 to-secondary/40 flex items-center justify-center">
                 <ChefHat className="w-12 h-12 text-primary/40" />
@@ -73,6 +79,12 @@ function Home() {
               </div>
             </Link>
           ))}
+          {(!recipes || recipes.length === 0) && (
+            <div className="col-span-full bg-card border border-dashed border-border rounded-2xl p-8 text-center space-y-3">
+              <p className="text-muted-foreground">Ta bibliothèque est encore vide. Génère 4 recettes en un clic et sauvegarde celles qui te plaisent.</p>
+              <Link to="/generer" className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-medium"><Sparkles className="w-4 h-4"/>Démarrer ma bibliothèque</Link>
+            </div>
+          )}
         </div>
       </section>
     </div>

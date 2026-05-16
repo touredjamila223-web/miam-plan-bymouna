@@ -20,9 +20,9 @@ async function generateJson<T>(opts: {
   model: any;
   system: string;
   prompt: string;
-  schema: z.ZodType<T>;
+  schema: z.ZodType<T, z.ZodTypeDef, any>;
   maxOutputTokens?: number;
-}) {
+}): Promise<T> {
   const { text } = await generateText({
     model: opts.model,
     system: `${opts.system}\n\nRéponds uniquement avec du JSON valide, sans Markdown, sans commentaire, sans texte avant ou après.`,

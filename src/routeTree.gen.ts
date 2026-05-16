@@ -17,6 +17,7 @@ import { Route as GenererRouteImport } from './routes/generer'
 import { Route as FrigoRouteImport } from './routes/frigo'
 import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as ChatRouteImport } from './routes/chat'
+import { Route as BatchRouteImport } from './routes/batch'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RecettesIdRouteImport } from './routes/recettes.$id'
@@ -62,6 +63,11 @@ const ChatRoute = ChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BatchRoute = BatchRouteImport.update({
+  id: '/batch',
+  path: '/batch',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -86,6 +92,7 @@ const ApiChatRoute = ApiChatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/batch': typeof BatchRoute
   '/chat': typeof ChatRoute
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/batch': typeof BatchRoute
   '/chat': typeof ChatRoute
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
@@ -115,6 +123,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/batch': typeof BatchRoute
   '/chat': typeof ChatRoute
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/batch'
     | '/chat'
     | '/courses'
     | '/frigo'
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/batch'
     | '/chat'
     | '/courses'
     | '/frigo'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/auth'
+    | '/batch'
     | '/chat'
     | '/courses'
     | '/frigo'
@@ -174,6 +186,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  BatchRoute: typeof BatchRoute
   ChatRoute: typeof ChatRoute
   CoursesRoute: typeof CoursesRoute
   FrigoRoute: typeof FrigoRoute
@@ -243,6 +256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/batch': {
+      id: '/batch'
+      path: '/batch'
+      fullPath: '/batch'
+      preLoaderRoute: typeof BatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -289,6 +309,7 @@ const RecettesRouteWithChildren = RecettesRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  BatchRoute: BatchRoute,
   ChatRoute: ChatRoute,
   CoursesRoute: CoursesRoute,
   FrigoRoute: FrigoRoute,

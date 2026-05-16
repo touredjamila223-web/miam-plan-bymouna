@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RecettesRouteImport } from './routes/recettes'
+import { Route as MesRecettesRouteImport } from './routes/mes-recettes'
 import { Route as GenererRouteImport } from './routes/generer'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
@@ -19,6 +20,11 @@ import { Route as ApiChatRouteImport } from './routes/api/chat'
 const RecettesRoute = RecettesRouteImport.update({
   id: '/recettes',
   path: '/recettes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MesRecettesRoute = MesRecettesRouteImport.update({
+  id: '/mes-recettes',
+  path: '/mes-recettes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GenererRoute = GenererRouteImport.update({
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/generer': typeof GenererRoute
+  '/mes-recettes': typeof MesRecettesRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
   '/recettes/$id': typeof RecettesIdRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/generer': typeof GenererRoute
+  '/mes-recettes': typeof MesRecettesRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
   '/recettes/$id': typeof RecettesIdRoute
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/generer': typeof GenererRoute
+  '/mes-recettes': typeof MesRecettesRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
   '/recettes/$id': typeof RecettesIdRoute
@@ -78,16 +87,25 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/generer'
+    | '/mes-recettes'
     | '/recettes'
     | '/api/chat'
     | '/recettes/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/generer' | '/recettes' | '/api/chat' | '/recettes/$id'
+  to:
+    | '/'
+    | '/auth'
+    | '/generer'
+    | '/mes-recettes'
+    | '/recettes'
+    | '/api/chat'
+    | '/recettes/$id'
   id:
     | '__root__'
     | '/'
     | '/auth'
     | '/generer'
+    | '/mes-recettes'
     | '/recettes'
     | '/api/chat'
     | '/recettes/$id'
@@ -97,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   GenererRoute: typeof GenererRoute
+  MesRecettesRoute: typeof MesRecettesRoute
   RecettesRoute: typeof RecettesRouteWithChildren
   ApiChatRoute: typeof ApiChatRoute
 }
@@ -108,6 +127,13 @@ declare module '@tanstack/react-router' {
       path: '/recettes'
       fullPath: '/recettes'
       preLoaderRoute: typeof RecettesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mes-recettes': {
+      id: '/mes-recettes'
+      path: '/mes-recettes'
+      fullPath: '/mes-recettes'
+      preLoaderRoute: typeof MesRecettesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/generer': {
@@ -164,6 +190,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   GenererRoute: GenererRoute,
+  MesRecettesRoute: MesRecettesRoute,
   RecettesRoute: RecettesRouteWithChildren,
   ApiChatRoute: ApiChatRoute,
 }

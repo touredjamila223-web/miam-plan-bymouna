@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useChat } from "@ai-sdk/react";
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,8 @@ export const Route = createFileRoute("/chat")({
 
 function Chat() {
   const { user } = useAuth();
-  const { messages, sendMessage, status, input, setInput } = useChat({
+  const [input, setInput] = useState("");
+  const { messages, sendMessage, status } = useChat({
     api: "/api/chat",
     body: { userId: user?.id ?? null },
   } as any);

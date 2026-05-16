@@ -2,7 +2,41 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
-import { generateObject } from "ai";
+import { generateText } from "ai";
+
+
+function extractJsonObject(text: string) {
+  const cleaned = text.replace(/```json|```/gi, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("Réponse IA invalide : aucun JSON détecté");
+  }
+  return JSON.parse(cleaned.slice(start, end + 1));
+}
+
+async function generateJson<T>(opts: {
+  model: any;
+  system: string;
+  prompt: string;
+  schema: z.ZodType<T>;
+  maxOutputTokens?: number;
+}) {
+  const { text } = await generateText({
+    model: opts.model,
+    system: `${opts.system}\n\nRéponds uniquement avec du JSON valide, sans Markdown, sans commentaire, sans texte avant ou après.`,
+    prompt: opts.prompt,
+    temperature: 0.6,
+    maxOutputTokens: opts.maxOutputTokens ?? 5000,
+  });
+
+  try {
+    return opts.schema.parse(extractJsonObject(text));
+  } catch (error) {
+    console.error("Invalid AI JSON", { error, text: text.slice(0, 1200) });
+    throw new Error("L'IA a renvoyé une réponse mal formée. Relance la génération.");
+  }
+}
 
 // ============== FRIDGE ==============
 
@@ -81,14 +115,15 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
-    const { object } = await generateObject({
+    const object = await generateJson({
       model,
       system: `Tu es un chef qui propose 3 a 5 recettes COHERENTES realisables avec les ingredients du frigo de la famille.
 Regles : identite culinaire claire (francais/italien/oriental/asiatique/mediterraneen/tex-mex/indien/libanais), accords logiques entre proteine, legumes, sauce et accompagnement.
 Respecter ABSOLUMENT les exclusions : ${restrictions.join(", ") || "aucune"}.
 Appareils disponibles : ${appliances}.
 Portions : ${servings}.
-Indique pour chaque suggestion les ingredients MANQUANTS a acheter (peu si possible).`,
+Indique pour chaque suggestion les ingredients MANQUANTS a acheter (peu si possible).
+Format attendu : {"suggestions":[{"title":"...","cuisine_style":"...","description":"...","missing_ingredients":["..."],"prep_time":30,"appliance":"..."}]}`,
       prompt: `Frigo : ${items.join(", ")}.`,
       schema: suggestionsSchema,
     });
@@ -293,7 +328,7 @@ export const generateShoppingFromPlan = createServerFn({ method: "POST" })
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
-    const { object } = await generateObject({
+    const object = await generateJson({
       model,
       system: `Tu consolides une liste de courses a partir des recettes prevues. Additionne les quantites identiques, regroupe par categorie de rayon, retire ce qui est deja dans le frigo.`,
       prompt: `Frigo dispo : ${fridgeStr}.\n\nRecettes prevues :\n${recipes}`,
@@ -348,7 +383,7 @@ export const generateBatch = createServerFn({ method: "POST" })
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
-    const { object } = await generateObject({
+    const object = await generateJson({
       model,
       system: `Tu concois une session de batch cooking dominicale de 2-3h pour preparer 5 repas de semaine pour ${servings} personnes.
 Regles :
@@ -358,6 +393,7 @@ Regles :
 - Respecter ABSOLUMENT : ${restrictions.join(", ") || "aucune restriction"}`,
       prompt: `Genere une session batch cooking complete pour la semaine.`,
       schema: batchSchema,
+      maxOutputTokens: 7000,
     });
     return object;
   });

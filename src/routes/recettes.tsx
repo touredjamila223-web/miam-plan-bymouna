@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -24,6 +24,7 @@ const TIME_OPTIONS = [
 ];
 
 function Recettes() {
+  const location = useLocation();
   const listMine = useServerFn(listMyRecipes);
   const { user } = useAuth();
   const [search, setSearch] = useState("");
@@ -44,6 +45,8 @@ function Recettes() {
   });
 
   const hasFilters = protein || cuisine || (maxTime && maxTime !== "0");
+
+  if (location.pathname !== "/recettes") return <Outlet />;
 
   return (
     <div className="space-y-6">

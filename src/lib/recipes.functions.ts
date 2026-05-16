@@ -3,9 +3,73 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
-import { generateObject } from "ai";
+import { generateText } from "ai";
 
-const recipeSchema = z.object({
+
+function extractJsonObject(text: string) {
+  const cleaned = text.replace(/```json|```/gi, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("Réponse IA invalide : aucun JSON détecté");
+  }
+  return JSON.parse(cleaned.slice(start, end + 1));
+}
+
+async function generateJson<T>(opts: {
+  model: any;
+  system: string;
+  prompt: string;
+  schema: z.ZodType<T, z.ZodTypeDef, any>;
+  maxOutputTokens?: number;
+}): Promise<T> {
+  const { text } = await generateText({
+    model: opts.model,
+    system: `${opts.system}\n\nRéponds uniquement avec du JSON valide, sans Markdown, sans commentaire, sans texte avant ou après.`,
+    prompt: opts.prompt,
+    temperature: 0.8,
+    maxOutputTokens: opts.maxOutputTokens ?? 6000,
+  });
+
+  try {
+    return opts.schema.parse(extractJsonObject(text));
+  } catch (error) {
+    console.error("Invalid AI JSON", { error, text: text.slice(0, 1200) });
+    throw new Error("L'IA a renvoyé une recette mal formée. Relance la génération.");
+  }
+}
+
+function normalizeRecipe(raw: unknown) {
+  if (!raw || typeof raw !== "object") return raw;
+  const r = raw as Record<string, any>;
+  const ingredients = Array.isArray(r.ingredients)
+    ? r.ingredients.map((ing: any) =>
+        typeof ing === "string" ? { name: ing, qty: "" } : { name: String(ing?.name ?? ing?.ingredient ?? ""), qty: String(ing?.qty ?? ing?.quantity ?? "") },
+      )
+    : [];
+  const stepsSource = Array.isArray(r.steps) ? r.steps : Array.isArray(r.instructions) ? r.instructions : [];
+  const steps = stepsSource.map((step: any) =>
+    typeof step === "string"
+      ? { text: step, timer_minutes: 0 }
+      : { text: String(step?.text ?? step?.instruction ?? ""), timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? 0), appliance_settings: step?.appliance_settings ?? step?.settings },
+  );
+  return {
+    title: String(r.title ?? "Recette familiale"),
+    description: String(r.description ?? r.summary ?? r.title ?? "Une recette familiale cohérente et savoureuse."),
+    cuisine_style: String(r.cuisine_style ?? r.cuisine ?? r.origin ?? "familial").toLowerCase(),
+    difficulty: ["facile", "moyen", "difficile"].includes(r.difficulty) ? r.difficulty : "facile",
+    prep_time: Number(r.prep_time ?? r.preparation_time ?? r.total_time ?? 35),
+    servings: Number(r.servings ?? 4),
+    appliance: String(r.appliance ?? r.device ?? "cookeo"),
+    protein: String(r.protein ?? r.proteine ?? r.main_protein ?? "végétarien").toLowerCase(),
+    vegetables: Array.isArray(r.vegetables) ? r.vegetables.map(String) : [],
+    calories: Number(r.calories ?? r.kcal ?? 500),
+    ingredients,
+    steps,
+  };
+}
+
+const recipeBaseSchema = z.object({
   title: z.string(),
   description: z.string(),
   cuisine_style: z.string(),
@@ -27,6 +91,13 @@ const recipeSchema = z.object({
     )
     .min(2),
 });
+
+type RecipeDto = z.infer<typeof recipeBaseSchema>;
+
+const recipeSchema: z.ZodType<RecipeDto, z.ZodTypeDef, unknown> = z.preprocess(
+  normalizeRecipe,
+  recipeBaseSchema,
+);
 
 function buildSystemPrompt(ctx: {
   appliance: string;
@@ -84,13 +155,12 @@ export const generateRecipe = createServerFn({ method: "POST" })
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
 
-    const { object } = await generateObject({
+    return generateJson({
       model,
       system: buildSystemPrompt({ appliance: data.appliance, restrictions, servings, family_name }),
       prompt: `Génère une recette complète pour : ${data.prompt}`,
       schema: recipeSchema,
     });
-    return object;
   });
 
 // Public — generate without account (guest mode)
@@ -103,7 +173,7 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
     if (!apiKey) throw new Error("Clé Lovable AI manquante");
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
-    const { object } = await generateObject({
+    return generateJson({
       model,
       system: buildSystemPrompt({
         appliance: data.appliance,
@@ -114,10 +184,9 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
       prompt: `Génère une recette complète pour : ${data.prompt}`,
       schema: recipeSchema,
     });
-    return object;
   });
 
-const saveSchema = recipeSchema.extend({
+const saveSchema = recipeBaseSchema.extend({
   photo_url: z.string().optional(),
   source: z.string().default("ai"),
 });
@@ -154,7 +223,7 @@ async function generateBatchOnce(opts: {
 }) {
   const gateway = createLovableAiGatewayProvider(opts.apiKey);
   const model = gateway("google/gemini-3-flash-preview");
-  const { object } = await generateObject({
+  const object = await generateJson({
     model,
     system: buildSystemPrompt({
       appliance: opts.appliance,
@@ -164,6 +233,7 @@ async function generateBatchOnce(opts: {
     }),
     prompt: buildBatchPrompt(opts.exclude, opts.hint),
     schema: batchSchema,
+    maxOutputTokens: 9000,
   });
   // Enforce max 2 same protein (post-check, deterministic trim)
   const counts: Record<string, number> = {};

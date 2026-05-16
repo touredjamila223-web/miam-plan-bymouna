@@ -11,9 +11,13 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RecettesRouteImport } from './routes/recettes'
 import { Route as ProfilRouteImport } from './routes/profil'
+import { Route as PlanningRouteImport } from './routes/planning'
 import { Route as MesRecettesRouteImport } from './routes/mes-recettes'
 import { Route as GenererRouteImport } from './routes/generer'
+import { Route as FrigoRouteImport } from './routes/frigo'
+import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as ChatRouteImport } from './routes/chat'
+import { Route as BatchRouteImport } from './routes/batch'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RecettesIdRouteImport } from './routes/recettes.$id'
@@ -29,6 +33,11 @@ const ProfilRoute = ProfilRouteImport.update({
   path: '/profil',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlanningRoute = PlanningRouteImport.update({
+  id: '/planning',
+  path: '/planning',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MesRecettesRoute = MesRecettesRouteImport.update({
   id: '/mes-recettes',
   path: '/mes-recettes',
@@ -39,9 +48,24 @@ const GenererRoute = GenererRouteImport.update({
   path: '/generer',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FrigoRoute = FrigoRouteImport.update({
+  id: '/frigo',
+  path: '/frigo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoursesRoute = CoursesRouteImport.update({
+  id: '/courses',
+  path: '/courses',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
   path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BatchRoute = BatchRouteImport.update({
+  id: '/batch',
+  path: '/batch',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -68,9 +92,13 @@ const ApiChatRoute = ApiChatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/batch': typeof BatchRoute
   '/chat': typeof ChatRoute
+  '/courses': typeof CoursesRoute
+  '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
   '/mes-recettes': typeof MesRecettesRoute
+  '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
@@ -79,9 +107,13 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/batch': typeof BatchRoute
   '/chat': typeof ChatRoute
+  '/courses': typeof CoursesRoute
+  '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
   '/mes-recettes': typeof MesRecettesRoute
+  '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
@@ -91,9 +123,13 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/batch': typeof BatchRoute
   '/chat': typeof ChatRoute
+  '/courses': typeof CoursesRoute
+  '/frigo': typeof FrigoRoute
   '/generer': typeof GenererRoute
   '/mes-recettes': typeof MesRecettesRoute
+  '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
@@ -104,9 +140,13 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/batch'
     | '/chat'
+    | '/courses'
+    | '/frigo'
     | '/generer'
     | '/mes-recettes'
+    | '/planning'
     | '/profil'
     | '/recettes'
     | '/api/chat'
@@ -115,9 +155,13 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/batch'
     | '/chat'
+    | '/courses'
+    | '/frigo'
     | '/generer'
     | '/mes-recettes'
+    | '/planning'
     | '/profil'
     | '/recettes'
     | '/api/chat'
@@ -126,9 +170,13 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/auth'
+    | '/batch'
     | '/chat'
+    | '/courses'
+    | '/frigo'
     | '/generer'
     | '/mes-recettes'
+    | '/planning'
     | '/profil'
     | '/recettes'
     | '/api/chat'
@@ -138,9 +186,13 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  BatchRoute: typeof BatchRoute
   ChatRoute: typeof ChatRoute
+  CoursesRoute: typeof CoursesRoute
+  FrigoRoute: typeof FrigoRoute
   GenererRoute: typeof GenererRoute
   MesRecettesRoute: typeof MesRecettesRoute
+  PlanningRoute: typeof PlanningRoute
   ProfilRoute: typeof ProfilRoute
   RecettesRoute: typeof RecettesRouteWithChildren
   ApiChatRoute: typeof ApiChatRoute
@@ -162,6 +214,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfilRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/planning': {
+      id: '/planning'
+      path: '/planning'
+      fullPath: '/planning'
+      preLoaderRoute: typeof PlanningRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/mes-recettes': {
       id: '/mes-recettes'
       path: '/mes-recettes'
@@ -176,11 +235,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GenererRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/frigo': {
+      id: '/frigo'
+      path: '/frigo'
+      fullPath: '/frigo'
+      preLoaderRoute: typeof FrigoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/courses': {
+      id: '/courses'
+      path: '/courses'
+      fullPath: '/courses'
+      preLoaderRoute: typeof CoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/chat': {
       id: '/chat'
       path: '/chat'
       fullPath: '/chat'
       preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/batch': {
+      id: '/batch'
+      path: '/batch'
+      fullPath: '/batch'
+      preLoaderRoute: typeof BatchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -229,9 +309,13 @@ const RecettesRouteWithChildren = RecettesRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  BatchRoute: BatchRoute,
   ChatRoute: ChatRoute,
+  CoursesRoute: CoursesRoute,
+  FrigoRoute: FrigoRoute,
   GenererRoute: GenererRoute,
   MesRecettesRoute: MesRecettesRoute,
+  PlanningRoute: PlanningRoute,
   ProfilRoute: ProfilRoute,
   RecettesRoute: RecettesRouteWithChildren,
   ApiChatRoute: ApiChatRoute,

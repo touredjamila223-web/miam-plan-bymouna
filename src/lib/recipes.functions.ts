@@ -39,7 +39,37 @@ async function generateJson<T>(opts: {
   }
 }
 
-const recipeSchema = z.object({
+function normalizeRecipe(raw: unknown) {
+  if (!raw || typeof raw !== "object") return raw;
+  const r = raw as Record<string, any>;
+  const ingredients = Array.isArray(r.ingredients)
+    ? r.ingredients.map((ing: any) =>
+        typeof ing === "string" ? { name: ing, qty: "" } : { name: String(ing?.name ?? ing?.ingredient ?? ""), qty: String(ing?.qty ?? ing?.quantity ?? "") },
+      )
+    : [];
+  const stepsSource = Array.isArray(r.steps) ? r.steps : Array.isArray(r.instructions) ? r.instructions : [];
+  const steps = stepsSource.map((step: any) =>
+    typeof step === "string"
+      ? { text: step, timer_minutes: 0 }
+      : { text: String(step?.text ?? step?.instruction ?? ""), timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? 0), appliance_settings: step?.appliance_settings ?? step?.settings },
+  );
+  return {
+    title: String(r.title ?? "Recette familiale"),
+    description: String(r.description ?? r.summary ?? r.title ?? "Une recette familiale cohérente et savoureuse."),
+    cuisine_style: String(r.cuisine_style ?? r.cuisine ?? r.origin ?? "familial").toLowerCase(),
+    difficulty: ["facile", "moyen", "difficile"].includes(r.difficulty) ? r.difficulty : "facile",
+    prep_time: Number(r.prep_time ?? r.preparation_time ?? r.total_time ?? 35),
+    servings: Number(r.servings ?? 4),
+    appliance: String(r.appliance ?? r.device ?? "cookeo"),
+    protein: String(r.protein ?? r.proteine ?? r.main_protein ?? "végétarien").toLowerCase(),
+    vegetables: Array.isArray(r.vegetables) ? r.vegetables.map(String) : [],
+    calories: Number(r.calories ?? r.kcal ?? 500),
+    ingredients,
+    steps,
+  };
+}
+
+const recipeSchema = z.preprocess(normalizeRecipe, z.object({
   title: z.string(),
   description: z.string(),
   cuisine_style: z.string(),
@@ -60,7 +90,7 @@ const recipeSchema = z.object({
       }),
     )
     .min(2),
-});
+}));
 
 function buildSystemPrompt(ctx: {
   appliance: string;

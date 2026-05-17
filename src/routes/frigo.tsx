@@ -9,8 +9,10 @@ import {
   removeFridgeItem,
   suggestFromFridge,
 } from "@/lib/planning.functions";
+import { saveRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { Refrigerator, Plus, X, Sparkles, ChefHat } from "lucide-react";
+import { Refrigerator, Plus, X, Sparkles, RefreshCw, Save, Clock, Flame, Carrot, ChefHat } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export const Route = createFileRoute("/frigo")({
   head: () => ({ meta: [{ title: "Mon frigo — MiamPlan" }] }),
@@ -24,6 +26,7 @@ function FrigoPage() {
   const add = useServerFn(addFridgeItem);
   const remove = useServerFn(removeFridgeItem);
   const suggest = useServerFn(suggestFromFridge);
+  const save = useServerFn(saveRecipes);
 
   const { data: items } = useQuery({
     queryKey: ["fridge"],
@@ -34,6 +37,7 @@ function FrigoPage() {
   const [name, setName] = useState("");
   const [qty, setQty] = useState("");
   const [suggestions, setSuggestions] = useState<any[] | null>(null);
+  const [selected, setSelected] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(false);
 
   const addMut = useMutation({
@@ -52,12 +56,28 @@ function FrigoPage() {
 
   async function runSuggest() {
     setLoading(true);
+    setSelected({});
+    setSuggestions(null);
     try {
       const s = await suggest();
       setSuggestions(s);
     } catch (e: any) {
       toast.error(e.message ?? "Erreur");
     } finally { setLoading(false); }
+  }
+
+  async function onSaveSelected() {
+    if (!suggestions) return;
+    const picks = suggestions.filter((_, i) => selected[i]);
+    if (!picks.length) return toast.error("Sélectionne au moins une recette");
+    try {
+      await save({ data: { recipes: picks.map((r) => ({ ...r, source: "ai" })) } });
+      toast.success(`${picks.length} recette(s) ajoutée(s) à ta bibliothèque !`);
+      setSuggestions(null);
+      setSelected({});
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   }
 
   if (!user) {
@@ -105,25 +125,43 @@ function FrigoPage() {
 
       {suggestions && (
         <section className="space-y-3">
-          <h2 className="text-xl font-bold">Suggestions</h2>
-          {suggestions.map((s, i) => (
-            <div key={i} className="bg-card border border-border rounded-2xl p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                    <span className="bg-secondary/50 px-2 py-0.5 rounded-full">{s.cuisine_style}</span>
-                    <span>{s.prep_time} min · {s.appliance}</span>
-                  </div>
-                  <h3 className="font-semibold flex items-center gap-2"><ChefHat className="w-4 h-4 text-primary" />{s.title}</h3>
-                  <p className="text-sm text-muted-foreground mt-1">{s.description}</p>
-                  {s.missing_ingredients?.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-2"><span className="font-medium">À acheter :</span> {s.missing_ingredients.join(", ")}</p>
-                  )}
-                </div>
-                <Link to="/generer" className="text-xs text-primary hover:underline whitespace-nowrap">Cuisiner →</Link>
-              </div>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h2 className="text-xl font-bold">Suggestions</h2>
+            <div className="flex gap-2">
+              <button onClick={runSuggest} disabled={loading} className="text-sm border border-border px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-50"><RefreshCw className="w-3.5 h-3.5"/>Tout écarter</button>
+              <button onClick={onSaveSelected} disabled={!Object.values(selected).some(Boolean)} className="text-sm bg-primary text-primary-foreground px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-50"><Save className="w-3.5 h-3.5"/>Sauvegarder la sélection</button>
             </div>
-          ))}
+          </div>
+          <p className="text-xs text-muted-foreground">Coche celles qui te plaisent pour les ajouter à ta bibliothèque, puis va les cuisiner.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {suggestions.map((s, i) => {
+              const isSel = !!selected[i];
+              return (
+                <label key={i} className={`bg-card border rounded-2xl p-4 cursor-pointer transition block ${isSel ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/40"}`}>
+                  <div className="flex items-start gap-3">
+                    <Checkbox checked={isSel} onCheckedChange={(v) => setSelected((st) => ({ ...st, [i]: !!v }))} className="mt-1"/>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground mb-1">
+                        <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">Familial</span>
+                        <span className="bg-accent/50 px-1.5 py-0.5 rounded-full capitalize">{s.protein}</span>
+                        <span className="bg-secondary/60 px-1.5 py-0.5 rounded-full capitalize">{s.cuisine_style}</span>
+                        <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3"/>{s.prep_time} min</span>
+                        {s.calories != null && <span className="inline-flex items-center gap-1"><Flame className="w-3 h-3"/>{s.calories} kcal</span>}
+                      </div>
+                      <h3 className="font-bold leading-tight flex items-center gap-2"><ChefHat className="w-4 h-4 text-primary"/>{s.title}</h3>
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{s.description}</p>
+                      {s.vegetables?.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1.5 inline-flex items-center gap-1"><Carrot className="w-3 h-3"/>{s.vegetables.join(", ")}</p>
+                      )}
+                      {s.missing_ingredients?.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-2"><span className="font-medium">À acheter :</span> {s.missing_ingredients.join(", ")}</p>
+                      )}
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
         </section>
       )}
     </div>

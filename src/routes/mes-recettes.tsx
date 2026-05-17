@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listFavorites } from "@/lib/recipes.functions";
+import { toast } from "sonner";
+import { listFavorites, toggleFavorite } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { RecipeCompactCard } from "@/components/recipe-compact-card";
-import { Heart } from "lucide-react";
+import { Heart, HeartOff } from "lucide-react";
 
 export const Route = createFileRoute("/mes-recettes")({
   head: () => ({ meta: [{ title: "Mes recettes — MiamPlan" }] }),
@@ -14,7 +15,17 @@ export const Route = createFileRoute("/mes-recettes")({
 function MesRecettes() {
   const { user, loading } = useAuth();
   const fn = useServerFn(listFavorites);
+  const toggleFn = useServerFn(toggleFavorite);
+  const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["favorites"], queryFn: () => fn(), enabled: !!user });
+  const unfavMut = useMutation({
+    mutationFn: (id: string) => toggleFn({ data: { recipe_id: id } }),
+    onSuccess: () => {
+      toast.success("Retiré des favoris");
+      qc.invalidateQueries({ queryKey: ["favorites"] });
+    },
+    onError: (e: any) => toast.error(e.message ?? "Erreur"),
+  });
 
   if (loading) return <p className="py-12 text-center text-muted-foreground">Chargement...</p>;
   if (!user) return (
@@ -33,7 +44,24 @@ function MesRecettes() {
       {recipes.length === 0 && <p className="text-muted-foreground">Aucun favori pour l'instant. Ajoutez-en depuis la <Link to="/recettes" className="text-primary underline">bibliothèque</Link>.</p>}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
         {recipes.map((r) => (
-          <RecipeCompactCard key={r.id} recipe={r} />
+          <RecipeCompactCard
+            key={r.id}
+            recipe={r}
+            action={
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  unfavMut.mutate(r.id);
+                }}
+                className="p-1.5 rounded-full bg-background/80 backdrop-blur border border-border text-primary hover:bg-destructive/10 hover:text-destructive hover:border-destructive transition"
+                aria-label="Retirer des favoris"
+                title="Retirer des favoris"
+              >
+                <HeartOff className="w-3.5 h-3.5" />
+              </button>
+            }
+          />
         ))}
       </div>
     </div>

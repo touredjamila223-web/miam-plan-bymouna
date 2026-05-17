@@ -85,6 +85,40 @@ function splitList(value: unknown) {
   return [];
 }
 
+function extractIngredientName(ing: any): string {
+  const direct =
+    ing?.name ?? ing?.nom ?? ing?.ingredient ?? ing?.ingrédient ?? ing?.aliment ?? ing?.produit ?? ing?.item ?? ing?.label ?? ing?.libelle ?? ing?.libellé ?? ing?.nom_ingredient ?? ing?.nomIngredient;
+  if (direct && typeof direct === "string" && direct.trim()) return direct.trim();
+  if (direct && typeof direct === "object") {
+    const inner = direct?.name ?? direct?.nom ?? direct?.text;
+    if (inner) return String(inner).trim();
+  }
+  // Fallback : 1ʳᵉ valeur string non vide (hors qty/quantity)
+  if (ing && typeof ing === "object") {
+    for (const [k, v] of Object.entries(ing)) {
+      if (/qty|quantit|amount|dose|unit|gram|ml|kcal|calor/i.test(k)) continue;
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+  }
+  return "";
+}
+
+function stringifySettings(value: any): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "string") return value.trim() || undefined;
+  if (Array.isArray(value)) {
+    const joined = value.map((v) => stringifySettings(v) ?? "").filter(Boolean).join(" • ");
+    return joined || undefined;
+  }
+  if (typeof value === "object") {
+    const parts = Object.entries(value)
+      .filter(([, v]) => v != null && v !== "")
+      .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`);
+    return parts.length ? parts.join(" • ") : undefined;
+  }
+  return String(value);
+}
+
 function normalizeFridgeRecipe(raw: unknown) {
   if (!raw || typeof raw !== "object") return raw;
   const r = raw as Record<string, any>;

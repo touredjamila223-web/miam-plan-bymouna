@@ -119,6 +119,50 @@ export function isSimilarRecipe(a: any, b: any): boolean {
   return false;
 }
 
+/**
+ * Construit un indice de goût à partir de l'historique cuisiné : protéines/styles
+ * les mieux notés et coups de cœur familial. Sert d'inspiration à l'IA.
+ */
+function buildTasteHint(history: any[]): string {
+  if (!history.length) return "";
+  const proteinScore = new Map<string, { sum: number; n: number }>();
+  const cuisineScore = new Map<string, { sum: number; n: number }>();
+  const loved: string[] = [];
+  for (const h of history) {
+    const r = h.recipes;
+    if (!r) continue;
+    const taste = Number(h.taste_rating ?? 0);
+    if (r.protein) {
+      const k = String(r.protein).toLowerCase();
+      const c = proteinScore.get(k) ?? { sum: 0, n: 0 };
+      c.sum += taste; c.n += 1; proteinScore.set(k, c);
+    }
+    if (r.cuisine_style) {
+      const k = String(r.cuisine_style).toLowerCase();
+      const c = cuisineScore.get(k) ?? { sum: 0, n: 0 };
+      c.sum += taste; c.n += 1; cuisineScore.set(k, c);
+    }
+    if (h.family_loved && r.title) loved.push(r.title);
+  }
+  const topProteins = [...proteinScore.entries()]
+    .map(([k, v]) => [k, v.sum / v.n] as const)
+    .filter(([, avg]) => avg >= 4)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([k]) => k);
+  const topCuisines = [...cuisineScore.entries()]
+    .map(([k, v]) => [k, v.sum / v.n] as const)
+    .filter(([, avg]) => avg >= 4)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([k]) => k);
+  const parts: string[] = [];
+  if (topProteins.length) parts.push(`la famille adore les protéines : ${topProteins.join(", ")}`);
+  if (topCuisines.length) parts.push(`styles préférés : ${topCuisines.join(", ")}`);
+  if (loved.length) parts.push(`coups de cœur passés (s'en inspirer sans les recopier) : ${loved.slice(0, 5).join(", ")}`);
+  return parts.length ? `Goûts famille — ${parts.join(" ; ")}` : "";
+}
+
 async function generateJson<T>(opts: {
   model: any;
   system: string;

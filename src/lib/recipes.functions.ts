@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
-import { generateObject, generateText } from "ai";
+import { generateText } from "ai";
 
 
 function extractJsonObject(text: string) {
@@ -170,25 +170,11 @@ async function generateJson<T>(opts: {
   schema: z.ZodType<T, z.ZodTypeDef, any>;
   maxOutputTokens?: number;
 }): Promise<T> {
-  try {
-    const { object } = await generateObject({
-      model: opts.model,
-      system: opts.system,
-      prompt: opts.prompt,
-      schema: opts.schema,
-      temperature: 0.8,
-      maxOutputTokens: opts.maxOutputTokens ?? 6000,
-    });
-    return object as T;
-  } catch (structuredError) {
-    console.error("Structured AI generation failed, falling back to JSON text", structuredError);
-  }
-
   const { text } = await generateText({
     model: opts.model,
-    system: `${opts.system}\n\nRéponds uniquement avec du JSON valide, sans Markdown, sans commentaire, sans texte avant ou après.`,
+    system: `${opts.system}\n\nCONTRAINTE TECHNIQUE CRITIQUE : réponds uniquement avec UN objet JSON valide. Aucun Markdown, aucune phrase avant/après, aucune virgule finale, aucune clé française.`,
     prompt: opts.prompt,
-    temperature: 0.8,
+    temperature: 0.55,
     maxOutputTokens: opts.maxOutputTokens ?? 6000,
   });
 

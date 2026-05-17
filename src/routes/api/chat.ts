@@ -136,8 +136,9 @@ Restrictions alimentaires : ${prefs2}.`;
                 }),
                 execute: async ({ prompt, appliance }) => {
                   try {
-                    const safePrompt = findApplianceId(prompt, applianceIds) && routeDishPrompt ? routeDishPrompt : prompt;
-                    const recipe = await generateRecipeForUser({ userId, prompt: safePrompt, appliance });
+                    const safePrompt = routeDishPrompt || prompt;
+                    const safeAppliance = selectedAppliance || appliance;
+                    const recipe = await generateRecipeForUser({ userId, prompt: safePrompt, appliance: safeAppliance });
                     return recipe;
                   } catch (e: any) {
                     console.error("proposeRecipe failed", e);
@@ -167,6 +168,8 @@ Règles IMPÉRATIVES pour les recettes :
 - Si l'utilisateur dit "une autre", "propose autre chose", "varie", appelle à nouveau proposeRecipe avec une orientation différente (style culinaire, protéine ou technique différente) en gardant le même appareil sauf indication contraire.
 - Après l'appel à proposeRecipe, contente-toi d'une phrase d'accroche courte ("Voilà ma proposition 🍽️ — tu peux la sauvegarder ou passer en mode cuisine.").
 - Évite d'écrire des questions à choix en texte libre quand un outil "askAppliance" peut le faire à ta place.
+
+État détecté côté serveur : ${shouldProposeNow ? `appelle proposeRecipe avec prompt="${routeDishPrompt}" et appliance="${selectedAppliance}".` : shouldAskApplianceNow ? "appelle askAppliance pour afficher les boutons d'appareils." : "pas d'action recette forcée."}
 
 Pour les autres conversations (conseils, équivalents d'ingrédients, batch cooking, idées de semaine), réponds normalement en français, de manière concise et conviviale.${ctxBlock}`,
           messages: await convertToModelMessages(messages),

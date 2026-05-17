@@ -163,7 +163,7 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
-    const object = await generateJson({
+    const object = await generateJson<{ suggestions: FridgeRecipe[] }>({
       model,
       system: `Tu es un chef qui propose 4 recettes COMPLETES, COHERENTES et VARIEES realisables avec le frigo de la famille.
 Regles ABSOLUES :

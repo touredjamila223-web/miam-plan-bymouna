@@ -88,18 +88,19 @@ function splitList(value: unknown) {
 function normalizeFridgeRecipe(raw: unknown) {
   if (!raw || typeof raw !== "object") return raw;
   const r = raw as Record<string, any>;
-  const ingredients = Array.isArray(r.ingredients)
-    ? r.ingredients.map((ing: any) =>
+  const ingredientsSource = r.ingredients ?? r["ingrédients"] ?? r.liste_ingredients ?? [];
+  const ingredients = Array.isArray(ingredientsSource)
+    ? ingredientsSource.map((ing: any) =>
         typeof ing === "string"
-          ? { name: ing, qty: "" }
-          : { name: String(ing?.name ?? ing?.ingredient ?? ""), qty: String(ing?.qty ?? ing?.quantity ?? "") },
+          ? { name: ing, qty: "à ajuster" }
+          : { name: String(ing?.name ?? ing?.nom ?? ing?.ingredient ?? ""), qty: String(ing?.qty ?? ing?.quantity ?? ing?.quantite ?? ing?.quantité ?? "à ajuster") },
       )
     : [];
-  const stepsSource = Array.isArray(r.steps) ? r.steps : Array.isArray(r.instructions) ? r.instructions : [];
+  const stepsSource = Array.isArray(r.steps) ? r.steps : Array.isArray(r.instructions) ? r.instructions : Array.isArray(r.etapes) ? r.etapes : [];
   const steps = stepsSource.map((step: any) =>
     typeof step === "string"
       ? { text: step, timer_minutes: 0 }
-      : { text: String(step?.text ?? step?.instruction ?? step?.description ?? ""), timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? step?.minutes ?? 0) || 0 },
+      : { text: String(step?.text ?? step?.texte ?? step?.instruction ?? step?.description ?? ""), timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? step?.minutes ?? 0) || 0, appliance_settings: step?.appliance_settings ?? step?.reglage_appareil ?? step?.settings },
   );
 
   return {
@@ -111,7 +112,7 @@ function normalizeFridgeRecipe(raw: unknown) {
     servings: Math.max(1, Math.round(Number(r.servings ?? r.portions ?? 4)) || 4),
     appliance: String(r.appliance ?? r.device ?? "cookeo"),
     protein: String(r.protein ?? r.proteine ?? r.main_protein ?? "végétarien").toLowerCase(),
-    vegetables: splitList(r.vegetables ?? r.legumes),
+    vegetables: splitList(r.vegetables ?? r.legumes ?? r["légumes"]),
     calories: Math.max(50, Math.round(Number(r.calories ?? r.kcal ?? 500)) || 500),
     ingredients,
     steps,

@@ -320,6 +320,24 @@ export const removeMealPlan = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const clearWeekPlan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ week_start: z.string() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const start = new Date(data.week_start);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    const { error } = await supabase
+      .from("meal_plan")
+      .delete()
+      .eq("user_id", userId)
+      .gte("date", data.week_start)
+      .lt("date", end.toISOString().slice(0, 10));
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 // ============== SHOPPING LIST ==============
 
 export const listShopping = createServerFn({ method: "GET" })

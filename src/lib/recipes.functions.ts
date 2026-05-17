@@ -531,7 +531,7 @@ export const listRecipes = createServerFn({ method: "GET" })
     let query = supabaseAdmin
       .from("recipes")
       .select(
-        "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories",
+        "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories, appliance",
       )
       .eq("source", "seed")
       .order("created_at", { ascending: false })
@@ -565,7 +565,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
     let query = supabase
       .from("recipes")
       .select(
-        "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories",
+        "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories, appliance",
       )
       .eq("owner_id", userId)
       .limit(120);

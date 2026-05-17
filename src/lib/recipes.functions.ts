@@ -58,7 +58,7 @@ function normalizeRecipe(raw: unknown) {
     description: String(r.description ?? r.summary ?? r.title ?? "Une recette familiale cohérente et savoureuse."),
     cuisine_style: String(r.cuisine_style ?? r.cuisine ?? r.origin ?? "familial").toLowerCase(),
     difficulty: ["facile", "moyen", "difficile"].includes(r.difficulty) ? r.difficulty : "facile",
-    prep_time: Number(r.prep_time ?? r.preparation_time ?? r.total_time ?? 35),
+    prep_time: Math.max(5, Math.round(Number(r.prep_time ?? r.preparation_time ?? r.total_time ?? r.cook_time ?? 0)) || 25),
     servings: Number(r.servings ?? 4),
     appliance: String(r.appliance ?? r.device ?? "cookeo"),
     protein: String(r.protein ?? r.proteine ?? r.main_protein ?? "végétarien").toLowerCase(),
@@ -66,6 +66,7 @@ function normalizeRecipe(raw: unknown) {
     calories: Number(r.calories ?? r.kcal ?? 500),
     ingredients,
     steps,
+    missing_ingredients: Array.isArray(r.missing_ingredients) ? r.missing_ingredients.map(String) : [],
   };
 }
 
@@ -90,6 +91,7 @@ const recipeBaseSchema = z.object({
       }),
     )
     .min(2),
+  missing_ingredients: z.array(z.string()).optional(),
 });
 
 type RecipeDto = z.infer<typeof recipeBaseSchema>;
@@ -115,6 +117,7 @@ Règles ABSOLUES :
 - Renseigne "protein" avec la protéine principale en un seul mot simple (poulet, boeuf, agneau, porc, poisson, fruits de mer, oeufs, tofu, légumineuses, fromage, végétarien).
 - Renseigne "vegetables" avec la liste des légumes utilisés (3 à 6 entrées, nom simple en minuscules).
 - Renseigne "calories" : estimation honnête des kcal par portion.
+- "prep_time" = temps TOTAL réaliste en minutes (préparation + cuisson). Il DOIT varier selon la recette : un tartare = 10-15 min, un sauté wok = 15-20 min, une poêlée = 20-25 min, un mijoté Cookeo = 25-40 min, un rôti four = 45-90 min, un bourguignon = 90-180 min. N'utilise JAMAIS une valeur par défaut, calcule honnêtement.
 - Préférences alimentaires à respecter ABSOLUMENT (aucun ingrédient interdit) : ${
     ctx.restrictions.length ? ctx.restrictions.join(", ") : "aucune"
   }.

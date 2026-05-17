@@ -388,7 +388,7 @@ export const generateRecipe = createServerFn({ method: "POST" })
     const family_name = profile.data?.family_name;
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
+    const model = gateway("openai/gpt-5-mini");
 
     const recipe = await generateJson({
       model,
@@ -415,7 +415,7 @@ export async function generateRecipeForUser(opts: {
   const servings = profile.data?.household_size ?? 4;
   const family_name = profile.data?.family_name ?? null;
   const gateway = createLovableAiGatewayProvider(apiKey);
-  const model = gateway("google/gemini-2.5-flash");
+  const model = gateway("openai/gpt-5-mini");
   const recipe = await generateJson({
     model,
     system: buildSystemPrompt({ appliance: opts.appliance, restrictions, servings, family_name }),
@@ -434,7 +434,7 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error("Clé Lovable AI manquante");
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
+    const model = gateway("openai/gpt-5-mini");
     const recipe = await generateJson({
       model,
       system: buildSystemPrompt({
@@ -485,7 +485,7 @@ async function generateBatchOnce(opts: {
   hint?: string;
 }) {
   const gateway = createLovableAiGatewayProvider(opts.apiKey);
-  const model = gateway("google/gemini-2.5-flash");
+  const model = gateway("openai/gpt-5-mini");
   const object = await generateJson({
     model,
     system: buildSystemPrompt({

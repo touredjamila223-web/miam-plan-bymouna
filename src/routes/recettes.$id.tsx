@@ -4,8 +4,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { getRecipe, toggleFavorite } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot } from "lucide-react";
+import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { useState } from "react";
+import { scaleQty, caloriesPerServing, caloriesTotal } from "@/lib/scale";
 
 export const Route = createFileRoute("/recettes/$id")({
   component: RecipeDetail,
@@ -28,6 +30,44 @@ function RecipeDetail() {
 
   const ingredients = (r.ingredients as any[]) ?? [];
   const steps = (r.steps as any[]) ?? [];
+  const baseServings = Math.max(1, Number(r.servings ?? 4));
+  return (
+    <RecipeView
+      recipe={r}
+      ingredients={ingredients}
+      steps={steps}
+      baseServings={baseServings}
+      onToggleFavorite={() => favMut.mutate()}
+      favPending={favMut.isPending}
+      showFav={!!user}
+      id={id}
+    />
+  );
+}
+
+function RecipeView({
+  recipe: r,
+  ingredients,
+  steps,
+  baseServings,
+  onToggleFavorite,
+  favPending,
+  showFav,
+  id,
+}: {
+  recipe: any;
+  ingredients: any[];
+  steps: any[];
+  baseServings: number;
+  onToggleFavorite: () => void;
+  favPending: boolean;
+  showFav: boolean;
+  id: string;
+}) {
+  const [servings, setServings] = useState(baseServings);
+  const ratio = servings / baseServings;
+  const kcalPortion = caloriesPerServing(r.calories);
+  const kcalTotal = caloriesTotal(kcalPortion, servings);
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -38,8 +78,10 @@ function RecipeDetail() {
           <span className="bg-secondary/50 px-2 py-1 rounded-full text-xs">{r.cuisine_style}</span>
           {r.protein && <span className="bg-accent/40 px-2 py-1 rounded-full text-xs inline-flex items-center gap-1"><Drumstick className="w-3 h-3"/>{r.protein}</span>}
           <span className="inline-flex items-center gap-1"><Clock className="w-4 h-4"/>{r.prep_time} min</span>
-          <span className="inline-flex items-center gap-1"><Users className="w-4 h-4"/>{r.servings} pers.</span>
-          {r.calories != null && <span className="inline-flex items-center gap-1"><Flame className="w-4 h-4"/>{r.calories} kcal</span>}
+          <span className="inline-flex items-center gap-1"><Users className="w-4 h-4"/>{servings} pers.</span>
+          {kcalPortion != null && (
+            <span className="inline-flex items-center gap-1"><Flame className="w-4 h-4"/>{kcalPortion} kcal/pers. · {kcalTotal} kcal total</span>
+          )}
           <span className="capitalize">• {r.difficulty}</span>
           {r.appliance && <span>• {r.appliance}</span>}
         </div>
@@ -54,8 +96,8 @@ function RecipeDetail() {
         <Link to="/recettes/cuisine/$id" params={{ id }} className="bg-primary text-primary-foreground px-5 py-2.5 rounded-full font-medium inline-flex items-center gap-2 hover:opacity-90">
           <Play className="w-4 h-4"/> Mode cuisine
         </Link>
-        {user && (
-          <Button variant="outline" onClick={() => favMut.mutate()} disabled={favMut.isPending}>
+        {showFav && (
+          <Button variant="outline" onClick={onToggleFavorite} disabled={favPending}>
             <Heart className="w-4 h-4"/> Favori
           </Button>
         )}
@@ -63,10 +105,45 @@ function RecipeDetail() {
 
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-1 bg-card border border-border rounded-2xl p-5">
-          <h2 className="font-bold mb-3">Ingrédients</h2>
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <h2 className="font-bold">Ingrédients</h2>
+            <div className="flex items-center gap-1 bg-muted rounded-full p-1">
+              <button
+                type="button"
+                onClick={() => setServings((s) => Math.max(1, s - 1))}
+                className="w-7 h-7 rounded-full bg-card border border-border flex items-center justify-center hover:bg-accent/30 disabled:opacity-40"
+                disabled={servings <= 1}
+                aria-label="Diminuer le nombre de personnes"
+              >
+                <Minus className="w-3.5 h-3.5"/>
+              </button>
+              <span className="text-sm font-semibold min-w-[3.5rem] text-center tabular-nums">
+                {servings} pers.
+              </span>
+              <button
+                type="button"
+                onClick={() => setServings((s) => Math.min(20, s + 1))}
+                className="w-7 h-7 rounded-full bg-card border border-border flex items-center justify-center hover:bg-accent/30 disabled:opacity-40"
+                disabled={servings >= 20}
+                aria-label="Augmenter le nombre de personnes"
+              >
+                <Plus className="w-3.5 h-3.5"/>
+              </button>
+            </div>
+          </div>
+          {servings !== baseServings && (
+            <p className="text-xs text-muted-foreground mb-2">
+              Quantités ajustées (recette de base : {baseServings} pers.)
+            </p>
+          )}
           <ul className="space-y-2 text-sm">
             {ingredients.map((ing, i) => (
-              <li key={i} className="flex justify-between gap-2"><span>{ing.name}</span><span className="text-muted-foreground">{ing.qty}</span></li>
+              <li key={i} className="flex justify-between gap-2">
+                <span>{ing.name}</span>
+                <span className="text-muted-foreground tabular-nums">
+                  {scaleQty(ing.qty, ratio)}
+                </span>
+              </li>
             ))}
           </ul>
         </div>

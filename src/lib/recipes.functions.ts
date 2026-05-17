@@ -496,6 +496,96 @@ export const deleteRecipe = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Régénère uniquement les étapes (texte + appliance_settings + timer) d'une recette
+// existante en respectant les nouvelles règles de précision appareil.
+const stepsOnlySchema = z.object({
+  prep_time: z.number().int().min(5).max(360).optional(),
+  steps: z
+    .array(
+      z.object({
+        text: z.string().min(3),
+        timer_minutes: z.number().int().min(0).optional(),
+        appliance_settings: z.string().optional(),
+      }),
+    )
+    .min(4),
+});
+
+export const refreshRecipeSteps = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("Clé Lovable AI manquante");
+
+    const { data: recipe, error } = await supabase
+      .from("recipes")
+      .select("*")
+      .eq("id", data.id)
+      .eq("owner_id", userId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!recipe) throw new Error("Recette introuvable");
+
+    const [profile, prefs] = await Promise.all([
+      supabase.from("profiles").select("family_name, household_size").eq("id", userId).maybeSingle(),
+      supabase.from("dietary_preferences").select("restriction").eq("user_id", userId),
+    ]);
+    const restrictions = (prefs.data ?? []).map((p) => p.restriction);
+    const servings = recipe.servings ?? profile.data?.household_size ?? 4;
+    const appliance = recipe.appliance ?? "cookeo";
+
+    const gateway = createLovableAiGatewayProvider(apiKey);
+    const model = gateway("google/gemini-3-flash-preview");
+
+    const result = await generateJson({
+      model,
+      system: buildSystemPrompt({
+        appliance,
+        restrictions,
+        servings,
+        family_name: profile.data?.family_name ?? null,
+      }),
+      prompt: `Voici une recette EXISTANTE. Réécris UNIQUEMENT les étapes en suivant strictement les règles "ÉTAPES DÉTAILLÉES" et "appliance_settings" (mode officiel + intensité chiffrée/température, 6 à 10 étapes, gestes précis, indices de réussite). Ne change ni le titre, ni les ingrédients, ni la protéine. Conserve la cohérence avec la liste d'ingrédients fournie.
+
+Recette : ${recipe.title}
+Style : ${recipe.cuisine_style ?? ""}
+Appareil : ${appliance}
+Portions : ${servings}
+Ingrédients : ${JSON.stringify(recipe.ingredients ?? [])}
+
+Réponds en JSON strict :
+{ "prep_time": <minutes réalistes>, "steps": [ { "text": "...", "timer_minutes": 0, "appliance_settings": "..." }, ... ] }`,
+      schema: stepsOnlySchema,
+      maxOutputTokens: 4000,
+    });
+
+    const { error: updErr } = await supabase
+      .from("recipes")
+      .update({
+        steps: result.steps,
+        prep_time: result.prep_time ?? recipe.prep_time,
+      })
+      .eq("id", recipe.id)
+      .eq("owner_id", userId);
+    if (updErr) throw new Error(updErr.message);
+    return { id: recipe.id, steps: result.steps };
+  });
+
+export const listRecipeIdsForRefresh = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data, error } = await supabase
+      .from("recipes")
+      .select("id, title")
+      .eq("owner_id", userId)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
 export const saveRecipes = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ recipes: z.array(saveSchema).min(1).max(10) }).parse(input))

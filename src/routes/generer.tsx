@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { generateRecipeBatch, saveRecipes } from "@/lib/recipes.functions";
+import { generateRecipeBatch, saveRecipes, importRecipeFromUrl, importRecipeFromImage } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { APPLIANCES } from "@/lib/constants";
-import { Sparkles, Clock, Users, Flame, Carrot, Drumstick, RefreshCw, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, Clock, Users, Flame, Carrot, Drumstick, RefreshCw, Save, ChevronDown, ChevronUp, Link2, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { StrictDietBanner } from "@/components/strict-diet-banner";
 
@@ -29,6 +29,51 @@ function Generer() {
 
   const genBatch = useServerFn(generateRecipeBatch);
   const save = useServerFn(saveRecipes);
+  const importUrl = useServerFn(importRecipeFromUrl);
+  const importImg = useServerFn(importRecipeFromImage);
+  const [importMode, setImportMode] = useState<"url" | "photo" | null>(null);
+  const [url, setUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+
+  async function onImportUrl() {
+    if (!user) return toast.error("Connecte-toi pour importer");
+    if (!url.trim()) return toast.error("Colle un lien de recette");
+    setImporting(true);
+    try {
+      const r = await importUrl({ data: { url: url.trim(), appliance } });
+      setRecipes([r]);
+      setSelected({ 0: true });
+      setExpanded({ 0: true });
+      toast.success("Recette importée — vérifie et sauvegarde");
+    } catch (e: any) {
+      toast.error(e.message ?? "Import impossible");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function onImportPhoto(file: File) {
+    if (!user) return toast.error("Connecte-toi pour importer");
+    if (file.size > 6 * 1024 * 1024) return toast.error("Photo trop lourde (max 6 Mo)");
+    setImporting(true);
+    try {
+      const dataUrl: string = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(fr.result as string);
+        fr.onerror = () => rej(new Error("Lecture impossible"));
+        fr.readAsDataURL(file);
+      });
+      const r = await importImg({ data: { image_data_url: dataUrl, appliance } });
+      setRecipes([r]);
+      setSelected({ 0: true });
+      setExpanded({ 0: true });
+      toast.success("Recette extraite — vérifie et sauvegarde");
+    } catch (e: any) {
+      toast.error(e.message ?? "Lecture impossible");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   async function go() {
     setLoading(true);
@@ -87,6 +132,47 @@ function Generer() {
           <Sparkles className="w-4 h-4"/>
           {loading ? "Le chef réfléchit…" : recipes.length ? "Régénérer 4 nouvelles recettes" : "Générer 4 recettes ✨"}
         </Button>
+
+        <div className="border-t border-border pt-4">
+          <p className="text-xs uppercase text-muted-foreground tracking-wider mb-2">Ou importe une recette existante</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => setImportMode((m) => (m === "url" ? null : "url"))}>
+              <Link2 className="w-4 h-4"/>Depuis un lien
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <label className="cursor-pointer">
+                <Camera className="w-4 h-4"/>Depuis une photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onImportPhoto(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </Button>
+          </div>
+          {importMode === "url" && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Input
+                placeholder="https://www.marmiton.org/..."
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className="flex-1 min-w-[220px]"
+              />
+              <Button onClick={onImportUrl} disabled={importing}>
+                {importing ? "Lecture…" : "Importer"}
+              </Button>
+            </div>
+          )}
+          {importing && importMode !== "url" && (
+            <p className="text-xs text-muted-foreground mt-2">L'IA lit la photo, ça peut prendre 10–20 s…</p>
+          )}
+        </div>
       </div>
 
       {recipes.length > 0 && (

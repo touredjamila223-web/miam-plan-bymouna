@@ -74,13 +74,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "MiamPlan — Cuisinez sainement en famille" },
-      { name: "description", content: "Recettes, batch cooking, planning hebdomadaire et assistant IA pour votre cuisine familiale." },
-      { property: "og:title", content: "MiamPlan" },
-      { property: "og:description", content: "Compagnon culinaire pour manger sainement en famille." },
+      { title: "MiamPlan - Cuisinez sainement en famille" },
+      { name: "description", content: "Préparez toute la semaine en une seule session. MiamPlan organise l’ordre de préparation et optimise l’utilisation de vos appareils en parallèle." },
+      { property: "og:title", content: "MiamPlan - Cuisinez sainement en famille" },
+      { property: "og:description", content: "Préparez toute la semaine en une seule session. MiamPlan organise l’ordre de préparation et optimise l’utilisation de vos appareils en parallèle." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "MiamPlan - Cuisinez sainement en famille" },
+      { name: "twitter:description", content: "Préparez toute la semaine en une seule session. MiamPlan organise l’ordre de préparation et optimise l’utilisation de vos appareils en parallèle." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/5465082a-9d87-4e94-b61d-d83bdeedc916" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/5465082a-9d87-4e94-b61d-d83bdeedc916" },
     ],
     links: [
       {

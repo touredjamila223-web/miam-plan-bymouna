@@ -3,10 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { listMealPlan, upsertMealPlan, removeMealPlan, generateWeekPlan } from "@/lib/planning.functions";
+import { listMealPlan, upsertMealPlan, removeMealPlan, generateWeekPlan, clearWeekPlan } from "@/lib/planning.functions";
 import { listMyRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { CalendarDays, X, ChevronLeft, ChevronRight, Plus, Sparkles, Download } from "lucide-react";
+import { CalendarDays, X, ChevronLeft, ChevronRight, Plus, Sparkles, Download, Trash2, Repeat } from "lucide-react";
 import { generateWeekPlanPdf } from "@/lib/planning-pdf";
 
 export const Route = createFileRoute("/planning")({
@@ -35,6 +35,7 @@ function PlanningPage() {
   const remove = useServerFn(removeMealPlan);
   const listRec = useServerFn(listMyRecipes);
   const fillWeekFn = useServerFn(generateWeekPlan);
+  const clearWeekFn = useServerFn(clearWeekPlan);
   const [filling, setFilling] = useState(false);
 
   const { data: plan } = useQuery({
@@ -68,7 +69,7 @@ function PlanningPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["plan", weekStartStr] }),
   });
 
-  const [picker, setPicker] = useState<{ date: string; slot: "matin" | "midi" | "soir" } | null>(null);
+  const [picker, setPicker] = useState<{ date: string; slot: "matin" | "midi" | "soir"; replaceId?: string } | null>(null);
 
   async function autoFillWeek(replace: boolean) {
     if (filling) return;
@@ -82,6 +83,17 @@ function PlanningPage() {
       toast.error(e.message ?? "Erreur");
     } finally {
       setFilling(false);
+    }
+  }
+
+  async function clearWeek() {
+    if (!window.confirm("Vider entièrement le planning de cette semaine ?")) return;
+    try {
+      await clearWeekFn({ data: { week_start: weekStartStr } });
+      toast.success("Semaine vidée");
+      qc.invalidateQueries({ queryKey: ["plan", weekStartStr] });
+    } catch (e: any) {
+      toast.error(e.message ?? "Erreur");
     }
   }
 
@@ -149,6 +161,13 @@ function PlanningPage() {
           Régénérer tout
         </button>
         <button
+          onClick={clearWeek}
+          className="border border-border px-3 py-2 rounded-full text-sm inline-flex items-center gap-2 text-destructive hover:bg-destructive/10"
+          title="Vider toute la semaine"
+        >
+          <Trash2 className="w-4 h-4" />Vider la semaine
+        </button>
+        <button
           onClick={downloadPdf}
           className="border border-border px-3 py-2 rounded-full text-sm inline-flex items-center gap-2"
         >
@@ -173,11 +192,28 @@ function PlanningPage() {
                     <div key={slot}>
                       <div className="text-[10px] uppercase text-muted-foreground mb-1">{slot}</div>
                       {e ? (
-                        <div className="bg-secondary/40 rounded-lg p-2 group relative">
-                          <Link to="/recettes/$id" params={{ id: e.recipe_id }} className="text-xs font-medium leading-tight line-clamp-2 block">
+                        <div className="bg-secondary/40 rounded-lg p-2 relative">
+                          <Link to="/recettes/$id" params={{ id: e.recipe_id }} className="text-xs font-medium leading-tight line-clamp-2 block pr-10">
                             {e.recipes?.title ?? "Recette"}
                           </Link>
-                          <button onClick={() => removeMut.mutate(e.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition"><X className="w-3 h-3" /></button>
+                          <div className="absolute top-1 right-1 flex gap-0.5">
+                            <button
+                              onClick={() => setPicker({ date: dateStr, slot, replaceId: e.id })}
+                              className="p-1 rounded hover:bg-background/60"
+                              title="Remplacer"
+                              aria-label="Remplacer"
+                            >
+                              <Repeat className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => removeMut.mutate(e.id)}
+                              className="p-1 rounded hover:bg-destructive/20 text-destructive"
+                              title="Supprimer"
+                              aria-label="Supprimer"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <button onClick={() => setPicker({ date: dateStr, slot })} className="w-full text-xs text-muted-foreground border border-dashed border-border rounded-lg p-2 hover:border-primary hover:text-primary flex items-center justify-center gap-1"><Plus className="w-3 h-3" />Ajouter</button>
@@ -198,7 +234,7 @@ function PlanningPage() {
       {picker && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-4" onClick={() => setPicker(null)}>
           <div className="bg-card rounded-2xl max-w-md w-full max-h-[80vh] overflow-y-auto p-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold mb-3">Choisir une recette</h3>
+            <h3 className="font-bold mb-3">{picker.replaceId ? "Remplacer par" : "Choisir une recette"}</h3>
             <div className="space-y-1">
               {(recipes ?? []).map((r: any) => (
                 <button
@@ -206,7 +242,7 @@ function PlanningPage() {
                   onClick={() => {
                     upsertMut.mutate({ date: picker.date, slot: picker.slot, recipe_id: r.id });
                     setPicker(null);
-                    toast.success("Ajouté au planning");
+                    toast.success(picker.replaceId ? "Recette remplacée" : "Ajouté au planning");
                   }}
                   className="w-full text-left px-3 py-2 rounded-lg hover:bg-accent/30"
                 >

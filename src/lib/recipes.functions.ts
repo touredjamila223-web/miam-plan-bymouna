@@ -294,7 +294,7 @@ export const saveRecipes = createServerFn({ method: "POST" })
   .inputValidator((input) => z.object({ recipes: z.array(saveSchema).min(1).max(10) }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const rows = data.recipes.map((r) => ({ ...r, owner_id: userId, source: "ai" }));
+    const rows = data.recipes.map(({ missing_ingredients, ...r }) => ({ ...r, owner_id: userId, source: "ai" }));
     const { data: inserted, error } = await supabase.from("recipes").insert(rows).select();
     if (error) throw new Error(error.message);
     return inserted;
@@ -305,9 +305,10 @@ export const saveRecipe = createServerFn({ method: "POST" })
   .inputValidator((input) => saveSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const { missing_ingredients, ...rest } = data;
     const { data: row, error } = await supabase
       .from("recipes")
-      .insert({ ...data, owner_id: userId })
+      .insert({ ...rest, owner_id: userId })
       .select()
       .single();
     if (error) throw new Error(error.message);

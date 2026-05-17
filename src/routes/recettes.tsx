@@ -1,15 +1,16 @@
 import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { listMyRecipes } from "@/lib/recipes.functions";
+import { toast } from "sonner";
+import { listMyRecipes, deleteRecipe } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PROTEINS, CUISINE_STYLES } from "@/lib/constants";
 import { RecipeCompactCard } from "@/components/recipe-compact-card";
-import { Search, X, Sparkles } from "lucide-react";
+import { Search, X, Sparkles, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/recettes")({
   head: () => ({ meta: [{ title: "Bibliothèque de recettes — MiamPlan" }] }),
@@ -27,6 +28,8 @@ const TIME_OPTIONS = [
 function Recettes() {
   const location = useLocation();
   const listMine = useServerFn(listMyRecipes);
+  const removeFn = useServerFn(deleteRecipe);
+  const qc = useQueryClient();
   const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [protein, setProtein] = useState<string>("");
@@ -43,6 +46,15 @@ function Recettes() {
     queryKey: ["recipes", search, protein, cuisine, maxTime, !!user],
     enabled: !!user,
     queryFn: () => listMine({ data: params }),
+  });
+  const delMut = useMutation({
+    mutationFn: (id: string) => removeFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Recette supprimée");
+      qc.invalidateQueries({ queryKey: ["recipes"] });
+      qc.invalidateQueries({ queryKey: ["favorites"] });
+    },
+    onError: (e: any) => toast.error(e.message ?? "Erreur"),
   });
 
   const hasFilters = protein || cuisine || (maxTime && maxTime !== "0");
@@ -92,7 +104,24 @@ function Recettes() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
         {(data ?? []).map((r: any) => (
-          <RecipeCompactCard key={r.id} recipe={r} />
+          <RecipeCompactCard
+            key={r.id}
+            recipe={r}
+            action={
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (confirm(`Supprimer "${r.title}" de ta bibliothèque ?`)) delMut.mutate(r.id);
+                }}
+                className="p-1.5 rounded-full bg-background/80 backdrop-blur border border-border text-muted-foreground hover:text-destructive hover:border-destructive transition"
+                aria-label="Supprimer la recette"
+                title="Supprimer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            }
+          />
         ))}
         {!user && (
           <div className="col-span-full text-center py-12 space-y-3">

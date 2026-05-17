@@ -250,14 +250,21 @@ async function generateBatchOnce(opts: {
 }
 
 export const generateRecipeBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input) => batchInput.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error("Clé Lovable AI manquante");
 
-    const restrictions = data.restrictions ?? [];
-    const servings = data.servings ?? 4;
-    const family_name: string | null = null;
+    const { supabase, userId } = context;
+    const [profile, prefs] = await Promise.all([
+      supabase.from("profiles").select("family_name, household_size").eq("id", userId).maybeSingle(),
+      supabase.from("dietary_preferences").select("restriction").eq("user_id", userId),
+    ]);
+    const dbRestrictions = (prefs.data ?? []).map((p) => p.restriction);
+    const restrictions = Array.from(new Set([...(data.restrictions ?? []), ...dbRestrictions]));
+    const servings = data.servings ?? profile.data?.household_size ?? 4;
+    const family_name = profile.data?.family_name ?? null;
     const exclude = data.exclude ?? [];
     let kept = await generateBatchOnce({
       apiKey,
@@ -287,6 +294,21 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       safety += 1;
     }
     return kept.slice(0, 4);
+  });
+
+export const deleteRecipe = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await supabase.from("favorites").delete().eq("recipe_id", data.id).eq("user_id", userId);
+    const { error } = await supabase
+      .from("recipes")
+      .delete()
+      .eq("id", data.id)
+      .eq("owner_id", userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const saveRecipes = createServerFn({ method: "POST" })

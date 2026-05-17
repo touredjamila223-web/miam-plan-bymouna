@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Clock, Flame, Carrot } from "lucide-react";
+import type { ReactNode } from "react";
 
 type RecipeCardData = {
   id: string;
@@ -25,15 +26,27 @@ function proteinEmoji(protein?: string | null) {
   return "🍽️";
 }
 
-export function RecipeCompactCard({ recipe, showDescription = false }: { recipe: RecipeCardData; showDescription?: boolean }) {
+export function RecipeCompactCard({
+  recipe,
+  showDescription = false,
+  action,
+}: {
+  recipe: RecipeCardData;
+  showDescription?: boolean;
+  action?: ReactNode;
+}) {
   const vegetables = recipe.vegetables?.filter(Boolean) ?? [];
 
   return (
-    <Link
-      to="/recettes/$id"
-      params={{ id: recipe.id }}
-      className="bg-card border border-border rounded-xl p-3 hover:border-primary/40 hover:shadow-sm transition flex flex-col gap-1.5 min-h-[118px]"
-    >
+    <div className="relative bg-card border border-border rounded-xl hover:border-primary/40 hover:shadow-sm transition">
+      {action && (
+        <div className="absolute top-1.5 right-1.5 z-10">{action}</div>
+      )}
+      <Link
+        to="/recettes/$id"
+        params={{ id: recipe.id }}
+        className="block p-3 pr-8 flex flex-col gap-1.5 min-h-[118px]"
+      >
       <h2 className="font-semibold leading-tight text-sm flex items-start gap-1.5">
         <span className="text-base leading-none mt-0.5" aria-hidden>{proteinEmoji(recipe.protein)}</span>
         <span className="flex-1 line-clamp-2">{recipe.title}</span>
@@ -54,6 +67,7 @@ export function RecipeCompactCard({ recipe, showDescription = false }: { recipe:
         </p>
       )}
       {showDescription && recipe.description && <p className="text-xs text-muted-foreground line-clamp-2">{recipe.description}</p>}
-    </Link>
+      </Link>
+    </div>
   );
 }

@@ -133,8 +133,14 @@ const fridgeRecipeBaseSchema = z.object({
   steps: z.array(z.object({ text: z.string(), timer_minutes: z.number().int().min(0).optional() })).min(2),
   missing_ingredients: z.array(z.string()).default([]),
 });
-const fridgeRecipeSchema = z.preprocess(normalizeFridgeRecipe, fridgeRecipeBaseSchema);
-const suggestionsSchema = z.object({ suggestions: z.array(fridgeRecipeSchema).min(1).max(6) });
+type FridgeRecipe = z.infer<typeof fridgeRecipeBaseSchema>;
+const fridgeRecipeSchema: z.ZodType<FridgeRecipe, z.ZodTypeDef, unknown> = z.preprocess(
+  normalizeFridgeRecipe,
+  fridgeRecipeBaseSchema,
+);
+const suggestionsSchema: z.ZodType<{ suggestions: FridgeRecipe[] }, z.ZodTypeDef, unknown> = z.object({
+  suggestions: z.array(fridgeRecipeSchema).min(1).max(6),
+});
 
 export const suggestFromFridge = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

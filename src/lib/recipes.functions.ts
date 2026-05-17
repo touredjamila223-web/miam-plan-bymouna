@@ -275,9 +275,10 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       exclude,
       hint: data.hint,
     });
+    kept = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0);
     // Top up if filter removed some
     let safety = 0;
-    while (kept.length < 4 && safety < 2) {
+    while (kept.length < 4 && safety < 3) {
       const more = await generateBatchOnce({
         apiKey,
         appliance: data.appliance,
@@ -289,6 +290,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       });
       for (const r of more) {
         if (kept.length >= 4) break;
+        if (violatesRestrictions(r, restrictions).length > 0) continue;
         kept.push(r);
       }
       safety += 1;

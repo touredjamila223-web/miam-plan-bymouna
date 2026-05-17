@@ -1,6 +1,6 @@
 export const APPLIANCES = [
   { id: "cookeo", label: "Cookeo Smart Wifi" },
-  { id: "monsieur-cuisine", label: "Four Monsieur Cuisine" },
+  { id: "monsieur-cuisine", label: "Monsieur Cuisine Smart" },
   { id: "airfryer", label: "Airfryer" },
   { id: "cocotte-minute", label: "Cocotte-minute" },
   { id: "four", label: "Four traditionnel" },

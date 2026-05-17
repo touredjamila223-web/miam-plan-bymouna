@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { listFavorites, toggleFavorite } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { RecipeCompactCard } from "@/components/recipe-compact-card";
+import { RecipeCardSkeletonGrid } from "@/components/recipe-card-skeleton";
 import { Heart, HeartOff } from "lucide-react";
 
 export const Route = createFileRoute("/mes-recettes")({
@@ -17,7 +18,7 @@ function MesRecettes() {
   const fn = useServerFn(listFavorites);
   const toggleFn = useServerFn(toggleFavorite);
   const qc = useQueryClient();
-  const { data } = useQuery({ queryKey: ["favorites"], queryFn: () => fn(), enabled: !!user });
+  const { data, isLoading } = useQuery({ queryKey: ["favorites"], queryFn: () => fn(), enabled: !!user });
   const unfavMut = useMutation({
     mutationFn: (id: string) => toggleFn({ data: { recipe_id: id } }),
     onSuccess: () => {
@@ -27,7 +28,7 @@ function MesRecettes() {
     onError: (e: any) => toast.error(e.message ?? "Erreur"),
   });
 
-  if (loading) return <p className="py-12 text-center text-muted-foreground">Chargement...</p>;
+  if (loading) return <div className="space-y-6"><div className="h-9 w-48 bg-primary/10 rounded animate-pulse" /><RecipeCardSkeletonGrid count={6} /></div>;
   if (!user) return (
     <div className="py-16 text-center max-w-md mx-auto">
       <Heart className="w-12 h-12 text-primary/40 mx-auto mb-3"/>
@@ -41,7 +42,11 @@ function MesRecettes() {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Mes recettes ❤️</h1>
-      {recipes.length === 0 && <p className="text-muted-foreground">Aucun favori pour l'instant. Ajoutez-en depuis la <Link to="/recettes" className="text-primary underline">bibliothèque</Link>.</p>}
+      {isLoading ? (
+        <RecipeCardSkeletonGrid count={6} />
+      ) : recipes.length === 0 ? (
+        <p className="text-muted-foreground">Aucun favori pour l'instant. Ajoutez-en depuis la <Link to="/recettes" className="text-primary underline">bibliothèque</Link>.</p>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
         {recipes.map((r) => (
           <RecipeCompactCard
@@ -64,6 +69,7 @@ function MesRecettes() {
           />
         ))}
       </div>
+      )}
     </div>
   );
 }

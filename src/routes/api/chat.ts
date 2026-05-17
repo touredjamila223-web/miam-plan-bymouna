@@ -158,7 +158,7 @@ Restrictions alimentaires : ${prefs2}.`;
             : shouldAskApplianceNow
               ? { type: "tool", toolName: "askAppliance" }
               : "auto",
-          stopWhen: stepCountIs(50),
+          stopWhen: stepCountIs(1),
           system: `Tu es Leia, l'assistante culinaire chaleureuse et précise de MiamPlan. Tu aides la famille à cuisiner sainement et à se faire plaisir.
 
 Règles IMPÉRATIVES pour les recettes :

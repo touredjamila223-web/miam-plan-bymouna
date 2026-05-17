@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
 import { generateText } from "ai";
-import { violatesRestrictions } from "./recipes.functions";
+import { violatesRestrictions, normalizeTitle } from "./recipes.functions";
 
 
 function extractJsonObject(text: string) {
@@ -150,17 +150,20 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error("Cle Lovable AI manquante");
 
-    const [fridge, prefs, appl, profile] = await Promise.all([
+    const [fridge, prefs, appl, profile, existing] = await Promise.all([
       supabase.from("fridge_items").select("name, qty").eq("user_id", userId),
       supabase.from("dietary_preferences").select("restriction").eq("user_id", userId),
       supabase.from("appliances").select("appliance").eq("user_id", userId),
       supabase.from("profiles").select("household_size").eq("id", userId).maybeSingle(),
+      supabase.from("recipes").select("title").eq("owner_id", userId).limit(300),
     ]);
     const items = (fridge.data ?? []).map((f) => `${f.name}${f.qty ? ` (${f.qty})` : ""}`);
     if (!items.length) throw new Error("Ajoutez d'abord des ingredients dans votre frigo");
     const restrictions = (prefs.data ?? []).map((p) => p.restriction);
     const appliances = (appl.data ?? []).map((a) => a.appliance).join(", ") || "poele, four, casserole";
     const servings = profile.data?.household_size ?? 4;
+    const existingTitles = (existing.data ?? []).map((r) => r.title);
+    const existingNorm = new Set(existingTitles.map(normalizeTitle));
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
@@ -172,6 +175,7 @@ Regles ABSOLUES :
 - Accords logiques proteine + legumes + sauce + accompagnement.
 - Pas plus de 2 recettes avec la meme proteine principale.
 - Respecter ABSOLUMENT les exclusions : ${restrictions.join(", ") || "aucune"}.
+- NE PROPOSE JAMAIS ces titres deja presents dans la bibliotheque de l'utilisateur : ${existingTitles.join(" | ") || "aucun"}. Invente des recettes differentes.
 - Appareils disponibles : ${appliances}. Adapter chaque etape a l'appareil utilise (programme, temperature, duree).
 - Portions : ${servings}.
 - Indiquer les ingredients MANQUANTS a acheter (le moins possible) dans "missing_ingredients".
@@ -182,7 +186,9 @@ Reponds : {"suggestions":[ 4 recettes completes ]}.`,
       schema: suggestionsSchema,
       maxOutputTokens: 9000,
     });
-    return object.suggestions.filter((s) => violatesRestrictions(s, restrictions).length === 0);
+    return object.suggestions.filter(
+      (s) => violatesRestrictions(s, restrictions).length === 0 && !existingNorm.has(normalizeTitle(s.title)),
+    );
   });
 
 // ============== MEAL PLAN ==============

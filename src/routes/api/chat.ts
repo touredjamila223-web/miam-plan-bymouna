@@ -90,9 +90,18 @@ Restrictions alimentaires : ${prefs2}.`;
         }
 
         const applianceIds: string[] = APPLIANCES.map((a) => a.id);
-        const userApplianceOptions = (userAppliances.length ? userAppliances : applianceIds)
-          .filter((id) => applianceIds.includes(id))
-          .map((id) => ({ id, label: APPLIANCES.find((a) => a.id === id)?.label ?? id }));
+        // Toujours proposer TOUS les appareils dans le chat — l'utilisateur peut vouloir
+        // tester une recette avec un appareil qu'il n'a pas encore enregistré.
+        // On met d'abord ceux qu'il possède (priorité visuelle), puis les autres.
+        const ownedSet = new Set(userAppliances.filter((id) => applianceIds.includes(id)));
+        const orderedIds = [
+          ...applianceIds.filter((id) => ownedSet.has(id)),
+          ...applianceIds.filter((id) => !ownedSet.has(id)),
+        ];
+        const userApplianceOptions = orderedIds.map((id) => ({
+          id,
+          label: APPLIANCES.find((a) => a.id === id)?.label ?? id,
+        }));
 
         const lastUserIndex = messages.map((m) => m.role).lastIndexOf("user");
         const lastUserText = messageText(messages[lastUserIndex]);

@@ -168,7 +168,7 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
     const existingSigs = new Set((existing.data ?? []).map((r: any) => recipeSignature(r)).filter(Boolean));
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-3-flash-preview");
+    const model = gateway("google/gemini-2.5-flash");
     const object = await generateJson<{ suggestions: FridgeRecipe[] }>({
       model,
       system: `Tu es un chef qui propose 4 recettes COMPLETES, COHERENTES et VARIEES realisables avec le frigo de la famille.
@@ -404,7 +404,7 @@ export const generateShoppingFromPlan = createServerFn({ method: "POST" })
       (fridge.data ?? []).map((f) => `${f.name}${f.qty ? ` (${f.qty})` : ""}`).join(", ") || "vide";
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-3-flash-preview");
+    const model = gateway("google/gemini-2.5-flash");
     const object = await generateJson({
       model,
       system: `Tu consolides une liste de courses a partir des recettes prevues. Additionne les quantites identiques, regroupe par categorie de rayon, retire ce qui est deja dans le frigo.`,
@@ -459,7 +459,7 @@ export const generateBatch = createServerFn({ method: "POST" })
     const servings = profile.data?.household_size ?? 4;
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-3-flash-preview");
+    const model = gateway("google/gemini-2.5-flash");
     const object = await generateJson({
       model,
       system: `Tu concois une session de batch cooking dominicale de 2-3h pour preparer 5 repas de semaine pour ${servings} personnes.
@@ -541,7 +541,7 @@ export const generateWeekPlan = createServerFn({ method: "POST" })
     const filledSet = new Set((existing ?? []).map((e: any) => `${e.date}|${e.slot}`));
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-3-flash-preview");
+    const model = gateway("google/gemini-2.5-flash");
 
     const recipeList = recipes
       .map((r: any) =>

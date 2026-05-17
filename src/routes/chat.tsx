@@ -133,7 +133,7 @@ function RecipeProposalCard({
         )}
       </div>
 
-      <details className="text-sm">
+      <details className="text-sm" open>
         <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
           Voir ingrédients & étapes
         </summary>
@@ -171,14 +171,18 @@ function RecipeProposalCard({
       )}
 
       <div className="flex flex-wrap gap-2 pt-1">
-        <Button size="sm" onClick={onSave} disabled={!isCompleteRecipe || busy !== null || !!savedId}>
-          {busy === "save" ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookmarkPlus className="w-4 h-4" />}
-          {savedId ? "Sauvegardée" : "Sauvegarder"}
-        </Button>
-        <Button size="sm" variant="default" onClick={onCook} disabled={!isCompleteRecipe || busy !== null}>
-          {busy === "cook" ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChefHat className="w-4 h-4" />}
-          Mode cuisine
-        </Button>
+        {isCompleteRecipe && (
+          <>
+            <Button size="sm" onClick={onSave} disabled={busy !== null || !!savedId}>
+              {busy === "save" ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookmarkPlus className="w-4 h-4" />}
+              {savedId ? "Sauvegardée" : "Sauvegarder"}
+            </Button>
+            <Button size="sm" variant="default" onClick={onCook} disabled={busy !== null}>
+              {busy === "cook" ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChefHat className="w-4 h-4" />}
+              Mode cuisine
+            </Button>
+          </>
+        )}
         <Button size="sm" variant="outline" onClick={onAnother} disabled={busy !== null}>
           <RotateCcw className="w-4 h-4" />
           Une autre

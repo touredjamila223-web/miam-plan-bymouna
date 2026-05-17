@@ -268,11 +268,11 @@ const recipeBaseSchema = z.object({
   protein: z.string(),
   vegetables: z.array(z.string()),
   calories: z.number().int().min(50).max(2000),
-  ingredients: z.array(z.object({ name: z.string(), qty: z.string() })).min(2),
+  ingredients: z.array(z.object({ name: z.string().trim().min(1), qty: z.string().trim().min(1) })).min(2),
   steps: z
     .array(
       z.object({
-        text: z.string(),
+        text: z.string().trim().min(3),
         timer_minutes: z.number().int().min(0).optional(),
         appliance_settings: z.string().optional(),
       }),
@@ -352,12 +352,13 @@ export const generateRecipe = createServerFn({ method: "POST" })
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-2.5-flash");
 
-    return generateJson({
+    const recipe = await generateJson({
       model,
       system: buildSystemPrompt({ appliance: data.appliance, restrictions, servings, family_name }),
       prompt: `Génère une recette complète pour : ${data.prompt}`,
       schema: recipeSchema,
     });
+    return { ...recipe, appliance: data.appliance };
   });
 
 // Helper réutilisable côté serveur (chat IA "Leia", etc.)
@@ -377,12 +378,13 @@ export async function generateRecipeForUser(opts: {
   const family_name = profile.data?.family_name ?? null;
   const gateway = createLovableAiGatewayProvider(apiKey);
   const model = gateway("google/gemini-2.5-flash");
-  return generateJson({
+  const recipe = await generateJson({
     model,
     system: buildSystemPrompt({ appliance: opts.appliance, restrictions, servings, family_name }),
     prompt: `Génère une recette complète pour : ${opts.prompt}`,
     schema: recipeSchema,
   });
+  return { ...recipe, appliance: opts.appliance };
 }
 
 // Public — generate without account (guest mode)
@@ -395,7 +397,7 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
     if (!apiKey) throw new Error("Clé Lovable AI manquante");
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-2.5-flash");
-    return generateJson({
+    const recipe = await generateJson({
       model,
       system: buildSystemPrompt({
         appliance: data.appliance,
@@ -406,6 +408,7 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
       prompt: `Génère une recette complète pour : ${data.prompt}`,
       schema: recipeSchema,
     });
+    return { ...recipe, appliance: data.appliance };
   });
 
 const saveSchema = recipeBaseSchema.extend({

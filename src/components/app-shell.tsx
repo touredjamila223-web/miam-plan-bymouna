@@ -1,14 +1,25 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { Home, BookOpen, Refrigerator, CalendarDays, User, MessageCircle, Sparkles, Heart, ShoppingCart, Layers, History, MoreHorizontal } from "lucide-react";
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserStats } from "@/hooks/use-user-stats";
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const MOBILE_NAV: { to: string; label: string; icon: any; countKey?: "favorites" | "cooked" }[] = [
   { to: "/", label: "Accueil", icon: Home },
   { to: "/recettes", label: "Recettes", icon: BookOpen },
   { to: "/frigo", label: "Frigo", icon: Refrigerator },
+  { to: "/planning", label: "Planning", icon: CalendarDays },
+];
+
+const MOBILE_MORE: { to: string; label: string; icon: any; countKey?: "favorites" | "cooked" }[] = [
+  { to: "/generer", label: "Générer", icon: Sparkles },
+  { to: "/courses", label: "Courses", icon: ShoppingCart },
+  { to: "/batch", label: "Batch cooking", icon: Layers },
   { to: "/mes-recettes", label: "Favoris", icon: Heart, countKey: "favorites" },
   { to: "/historique", label: "Réalisées", icon: History, countKey: "cooked" },
+  { to: "/chat", label: "Chat IA", icon: MessageCircle },
+  { to: "/profil", label: "Profil", icon: User },
 ];
 
 const DESKTOP_NAV: { to: string; label: string; icon: any; countKey?: "favorites" | "cooked" }[] = [
@@ -39,6 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hideOnAuth = location.pathname === "/auth";
   const { data: stats } = useUserStats();
   const counts = { favorites: stats?.favorites ?? 0, cooked: stats?.cooked ?? 0 };
+  const [moreOpen, setMoreOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-20 md:pb-0 md:pl-60">
@@ -82,9 +94,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {n.label}
           </Link>
         ))}
-        <Link to="/profil" className="flex flex-col items-center gap-1 px-1 py-1 text-[10px] leading-tight" activeProps={{ className: "text-primary" }}>
-          <MoreHorizontal className="w-5 h-5" />Plus
-        </Link>
+        <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+          <SheetTrigger asChild>
+            <button className="flex flex-col items-center gap-1 px-1 py-1 text-[10px] leading-tight">
+              <MoreHorizontal className="w-5 h-5" />Plus
+            </button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="rounded-t-2xl">
+            <SheetHeader>
+              <SheetTitle>Plus d'options</SheetTitle>
+            </SheetHeader>
+            <div className="grid grid-cols-3 gap-3 mt-4 pb-4">
+              {MOBILE_MORE.map((n) => (
+                <Link
+                  key={n.to}
+                  to={n.to}
+                  onClick={() => setMoreOpen(false)}
+                  className="flex flex-col items-center gap-2 p-3 rounded-xl bg-card border border-border hover:border-primary/40 transition"
+                  activeProps={{ className: "border-primary text-primary" }}
+                >
+                  <div className="relative">
+                    <n.icon className="w-6 h-6" />
+                    {n.countKey && counts[n.countKey] > 0 && (
+                      <span className="absolute -top-1.5 -right-2 bg-primary text-primary-foreground text-[9px] font-semibold px-1 py-0 rounded-full min-w-[14px] text-center leading-tight">
+                        {counts[n.countKey] > 99 ? "99+" : counts[n.countKey]}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-center leading-tight">{n.label}</span>
+                </Link>
+              ))}
+            </div>
+          </SheetContent>
+        </Sheet>
       </nav>
 
       {/* Floating chat */}

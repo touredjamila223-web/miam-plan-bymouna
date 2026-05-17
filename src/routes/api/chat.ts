@@ -42,22 +42,27 @@ Restrictions alimentaires : ${prefs2}.`;
           ? {
               proposeRecipe: tool({
                 description:
-                  "Génère une proposition de recette complète et structurée pour l'utilisateur, adaptée à un appareil de cuisson précis. Utilise cet outil dès que l'utilisateur demande une recette (et qu'on connaît l'appareil). Ne renvoie PAS la recette en texte toi-même : utilise UNIQUEMENT cet outil. Une fois l'outil appelé, fais juste une courte phrase d'accroche.",
+                  "Génère une proposition de recette complète et structurée pour l'utilisateur, adaptée à un appareil de cuisson précis. À APPELER IMPÉRATIVEMENT dès que tu connais (1) le plat/idée demandé et (2) l'appareil choisi — y compris quand l'utilisateur vient juste de répondre avec un nom d'appareil après ta question. Ne renvoie JAMAIS la recette en texte : utilise UNIQUEMENT cet outil.",
                 inputSchema: z.object({
                   prompt: z
                     .string()
                     .min(2)
                     .max(500)
                     .describe(
-                      "Description de la recette voulue : ingrédients, style, contraintes, type de plat. Ex: 'poulet curry coco rapide pour ce soir'",
+                      "Description du plat voulu, REPRISE du dernier message de demande de recette de l'utilisateur (ex: 'soupe de poulet africaine'). Ne JAMAIS mettre juste le nom de l'appareil ici.",
                     ),
                   appliance: z
                     .enum(applianceIds as [string, ...string[]])
                     .describe("Identifiant de l'appareil de cuisson confirmé par l'utilisateur."),
                 }),
                 execute: async ({ prompt, appliance }) => {
-                  const recipe = await generateRecipeForUser({ userId, prompt, appliance });
-                  return recipe;
+                  try {
+                    const recipe = await generateRecipeForUser({ userId, prompt, appliance });
+                    return recipe;
+                  } catch (e: any) {
+                    console.error("proposeRecipe failed", e);
+                    return { error: e?.message ?? "Erreur génération recette" };
+                  }
                 },
               }),
             }
@@ -65,16 +70,17 @@ Restrictions alimentaires : ${prefs2}.`;
 
         const gateway = createLovableAiGatewayProvider(apiKey);
         const result = streamText({
-          model: gateway("google/gemini-3-flash-preview"),
+          model: gateway("google/gemini-2.5-flash"),
           tools,
           stopWhen: stepCountIs(50),
           system: `Tu es Leia, l'assistante culinaire chaleureuse et précise de MiamPlan. Tu aides la famille à cuisiner sainement et à se faire plaisir.
 
 Règles IMPÉRATIVES pour les recettes :
 - Dès que l'utilisateur évoque vouloir une recette ou un plat, ne réponds JAMAIS la recette en texte. Utilise l'outil "proposeRecipe".
-- Avant d'appeler l'outil, vérifie quel appareil utiliser. Si l'utilisateur n'a pas précisé, demande-lui en une phrase quel appareil parmi ses appareils disponibles il veut utiliser (propose 2-3 options pertinentes). N'invente jamais un appareil qu'il ne possède pas.
-- Si l'utilisateur dit "une autre", "propose autre chose", "varie", appelle à nouveau proposeRecipe avec une orientation différente (style culinaire, protéine ou technique différente).
-- Après l'appel à l'outil, contente-toi d'une phrase d'accroche courte ("Voilà ma proposition ${"🍽️"} — tu peux la sauvegarder ou passer en mode cuisine.").
+- Avant d'appeler l'outil, vérifie quel appareil utiliser. Si l'utilisateur n'a pas précisé, demande-lui en une phrase quel appareil parmi ses appareils disponibles il veut utiliser (propose 2-3 options pertinentes parmi ses appareils). N'invente jamais un appareil qu'il ne possède pas.
+- IMPORTANT : dès que l'utilisateur répond en nommant un appareil (ex : "Cookeo", "Monsieur Cuisine", "Airfryer"...) après ta question, APPELLE IMMÉDIATEMENT proposeRecipe en reprenant comme "prompt" le dernier plat évoqué dans la conversation et en mappant l'appareil sur l'un de ces identifiants : ${applianceIds.join(", ")}. Ne renvoie pas de texte vide.
+- Si l'utilisateur dit "une autre", "propose autre chose", "varie", appelle à nouveau proposeRecipe avec une orientation différente (style culinaire, protéine ou technique différente) en gardant le même appareil sauf indication contraire.
+- Après l'appel à l'outil, contente-toi d'une phrase d'accroche courte ("Voilà ma proposition 🍽️ — tu peux la sauvegarder ou passer en mode cuisine.").
 
 Pour les autres conversations (conseils, équivalents d'ingrédients, batch cooking, idées de semaine), réponds normalement en français, de manière concise et conviviale.${ctxBlock}`,
           messages: await convertToModelMessages(messages),

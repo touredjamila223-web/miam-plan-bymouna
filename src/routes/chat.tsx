@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -178,10 +179,15 @@ function RecipeProposalCard({
 function Chat() {
   const { user } = useAuth();
   const [input, setInput] = useState("");
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api: "/api/chat", body: { userId: user?.id ?? null } }),
+    [user?.id],
+  );
   const { messages, sendMessage, status } = useChat({
-    api: "/api/chat",
-    body: { userId: user?.id ?? null },
-  } as any);
+    id: user?.id ? `leia-${user.id}` : "leia-guest",
+    transport,
+    onError: (error) => toast.error(error.message || "Leia n'a pas réussi à répondre."),
+  });
 
   function askAnother() {
     sendMessage({ text: "Propose-moi une autre recette, différente (autre style culinaire, autre protéine ou autre technique)." });

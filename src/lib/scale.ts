@@ -62,8 +62,17 @@ export function scaleQty(qty: string | undefined | null, ratio: number): string 
   return formatScaled(parsed.value * ratio, parsed.rest);
 }
 
-export function scaleCalories(calories: number | null | undefined, ratio: number): number | null {
+/** Calories par portion (constant) — l'IA stocke des kcal par personne. */
+export function caloriesPerServing(calories: number | null | undefined): number | null {
   if (calories == null) return null;
-  // calories sont par portion → on ne change pas avec le ratio
   return Math.round(calories);
+}
+
+/** Calories totales pour N personnes = kcal/portion × N. */
+export function caloriesTotal(
+  caloriesPerServing: number | null | undefined,
+  servings: number,
+): number | null {
+  if (caloriesPerServing == null) return null;
+  return Math.round(caloriesPerServing * Math.max(1, servings));
 }

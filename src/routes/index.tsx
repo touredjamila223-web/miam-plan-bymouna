@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listMyRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { Sparkles, Refrigerator, CalendarDays, BookOpen, ChefHat } from "lucide-react";
+import { RecipeCompactCard } from "@/components/recipe-compact-card";
+import { Sparkles, Refrigerator, CalendarDays, BookOpen, ChefHat, Heart, History } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -17,6 +18,8 @@ export const Route = createFileRoute("/")({
 
 const SHORTCUTS = [
   { to: "/recettes", label: "Bibliothèque", desc: "Toutes les recettes", icon: BookOpen },
+  { to: "/mes-recettes", label: "Favoris", desc: "Recettes aimées", icon: Heart },
+  { to: "/historique", label: "Réalisées", desc: "Plats cuisinés", icon: History },
   { to: "/generer", label: "Générer", desc: "Une recette sur mesure", icon: Sparkles },
   { to: "/frigo", label: "Mon frigo", desc: "Que cuisiner avec ?", icon: Refrigerator },
   { to: "/planning", label: "Planning", desc: "La semaine en un coup d'œil", icon: CalendarDays },
@@ -47,7 +50,7 @@ function Home() {
 
       <section>
         <h2 className="text-2xl font-bold mb-4">Accès rapide</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {SHORTCUTS.map((s) => (
             <Link key={s.to} to={s.to} className="bg-card border border-border rounded-2xl p-4 hover:shadow-md hover:border-primary/30 transition group">
               <s.icon className="w-6 h-6 text-primary mb-2 group-hover:scale-110 transition" />
@@ -63,21 +66,9 @@ function Home() {
           <h2 className="text-2xl font-bold">Recettes à découvrir</h2>
           <Link to="/recettes" className="text-sm text-primary hover:underline">Tout voir →</Link>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {(recipes ?? []).slice(0, 6).map((r: any) => (
-            <Link key={r.id} to="/recettes/$id" params={{ id: r.id }} className="bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition">
-              <div className="aspect-[4/3] bg-gradient-to-br from-accent/40 to-secondary/40 flex items-center justify-center">
-                <ChefHat className="w-12 h-12 text-primary/40" />
-              </div>
-              <div className="p-4">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                  <span className="bg-secondary/50 px-2 py-0.5 rounded-full">{r.cuisine_style}</span>
-                  <span>{r.prep_time} min</span>
-                </div>
-                <h3 className="font-semibold text-base leading-tight">{r.title}</h3>
-                {r.description && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{r.description}</p>}
-              </div>
-            </Link>
+            <RecipeCompactCard key={r.id} recipe={r} showDescription />
           ))}
           {(!recipes || recipes.length === 0) && (
             <div className="col-span-full bg-card border border-dashed border-border rounded-2xl p-8 text-center space-y-3">

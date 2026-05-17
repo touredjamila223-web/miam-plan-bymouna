@@ -9,6 +9,59 @@ import { APPLIANCES } from "@/lib/constants";
 
 type Body = { messages?: UIMessage[]; userId?: string | null };
 
+function messageText(message: UIMessage | undefined) {
+  return (message?.parts ?? [])
+    .map((part: any) => (part?.type === "text" ? part.text : ""))
+    .join(" ")
+    .trim();
+}
+
+function normalizeText(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function findApplianceId(text: string, allowedIds: string[]) {
+  const explicitId = text.match(/id\s*:\s*([a-z0-9_-]+)/i)?.[1];
+  if (explicitId && allowedIds.includes(explicitId)) return explicitId;
+  const normalized = normalizeText(text);
+  return APPLIANCES.find((appliance) => {
+    if (!allowedIds.includes(appliance.id)) return false;
+    const candidates = [appliance.id, appliance.label, appliance.label.replace(/\s+/g, "-")];
+    return candidates.some((candidate) => {
+      const c = normalizeText(candidate);
+      return c.length >= 3 && normalized.includes(c);
+    });
+  })?.id;
+}
+
+function looksLikeRecipeRequest(text: string) {
+  const normalized = normalizeText(text);
+  if (!normalized) return false;
+  if (/\b(recette|cuisine|cuisiner|prepare|preparer|plat|repas|diner|dejeuner|propose|idee)\b/.test(normalized)) {
+    return true;
+  }
+  return /\b(soupe|poulet|boeuf|bœuf|veau|agneau|poisson|saumon|cabillaud|curry|tajine|gratin|pates|riz|lasagne|burger|salade|lentilles|legumes|omelette)\b/.test(
+    normalized,
+  );
+}
+
+function findPreviousDishPrompt(messages: UIMessage[], currentUserIndex: number, applianceIds: string[]) {
+  for (let i = currentUserIndex - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message?.role !== "user") continue;
+    const text = messageText(message);
+    const appliance = findApplianceId(text, applianceIds);
+    const isApplianceChoice = appliance && normalizeText(text).split(" ").length <= 8;
+    if (!isApplianceChoice && looksLikeRecipeRequest(text)) return text;
+  }
+  return "";
+}
+
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {

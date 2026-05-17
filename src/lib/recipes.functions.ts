@@ -60,6 +60,65 @@ export function normalizeTitle(t: string): string {
     .trim();
 }
 
+const PANTRY = new Set([
+  "sel","poivre","huile","eau","ail","oignon","oignons","echalote","echalotes",
+  "beurre","sucre","farine","persil","coriandre","basilic","thym","laurier",
+  "cumin","paprika","curry","piment","vinaigre","citron","bouillon","epices",
+  "sauce","creme","lait","moutarde","miel","gingembre","ras","mix","mélange",
+]);
+
+function normWord(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Signature stable d'une recette : protéine + ingrédients clés normalisés
+ * (hors ingrédients de garde-manger). Permet de détecter des doublons
+ * même quand le titre diffère.
+ */
+export function recipeSignature(r: any): string {
+  const protein = normWord(r?.protein ?? "").split(" ")[0] ?? "";
+  const ings: any[] = Array.isArray(r?.ingredients) ? r.ingredients : [];
+  const veg: any[] = Array.isArray(r?.vegetables) ? r.vegetables : [];
+  const tokens = new Set<string>();
+  for (const i of ings) {
+    const name = typeof i === "string" ? i : (i?.name ?? "");
+    const first = normWord(name).split(" ").find((w) => w.length > 2 && !PANTRY.has(w));
+    if (first) tokens.add(first);
+  }
+  for (const v of veg) {
+    const first = normWord(String(v)).split(" ").find((w) => w.length > 2 && !PANTRY.has(w));
+    if (first) tokens.add(first);
+  }
+  const keys = Array.from(tokens).sort().slice(0, 6).join(",");
+  return `${protein}|${keys}`;
+}
+
+export function isSimilarRecipe(a: any, b: any): boolean {
+  if (normalizeTitle(a?.title ?? "") === normalizeTitle(b?.title ?? "")) return true;
+  const sa = recipeSignature(a);
+  const sb = recipeSignature(b);
+  if (!sa || !sb) return false;
+  if (sa === sb) return true;
+  // overlap ≥ 4 tokens clés + même protéine → considéré comme variante
+  const [pa, ta] = sa.split("|");
+  const [pb, tb] = sb.split("|");
+  if (pa && pa === pb) {
+    const setA = new Set(ta.split(",").filter(Boolean));
+    const setB = new Set(tb.split(",").filter(Boolean));
+    let overlap = 0;
+    for (const t of setA) if (setB.has(t)) overlap += 1;
+    if (overlap >= 4) return true;
+  }
+  return false;
+}
+
 async function generateJson<T>(opts: {
   model: any;
   system: string;
@@ -311,13 +370,15 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
     const family_name = profile.data?.family_name ?? null;
     const { data: existing } = await supabase
       .from("recipes")
-      .select("title")
+      .select("title, protein, vegetables, ingredients")
       .eq("owner_id", userId)
       .limit(300);
     const existingTitles = (existing ?? []).map((r) => r.title);
     const existingNorm = new Set(existingTitles.map(normalizeTitle));
+    const existingSigs = new Set((existing ?? []).map((r: any) => recipeSignature(r)).filter(Boolean));
     const exclude = Array.from(new Set([...(data.exclude ?? []), ...existingTitles]));
-    const isDuplicate = (r: any) => existingNorm.has(normalizeTitle(r.title));
+    const isDuplicate = (r: any) =>
+      existingNorm.has(normalizeTitle(r.title)) || existingSigs.has(recipeSignature(r));
     let kept = await generateBatchOnce({
       apiKey,
       appliance: data.appliance,
@@ -344,12 +405,18 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
         if (kept.length >= 4) break;
         if (violatesRestrictions(r, restrictions).length > 0) continue;
         if (isDuplicate(r)) continue;
-        if (kept.some((k) => normalizeTitle(k.title) === normalizeTitle(r.title))) continue;
+        if (kept.some((k) => isSimilarRecipe(k, r))) continue;
         kept.push(r);
       }
       safety += 1;
     }
-    return kept.slice(0, 4);
+    // Filtre intra-lot final : enlève les variantes proches entre elles
+    const unique: typeof kept = [];
+    for (const r of kept) {
+      if (unique.some((k) => isSimilarRecipe(k, r))) continue;
+      unique.push(r);
+    }
+    return unique.slice(0, 4);
   });
 
 export const deleteRecipe = createServerFn({ method: "POST" })

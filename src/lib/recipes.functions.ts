@@ -384,6 +384,18 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
     const exclude = Array.from(new Set([...(data.exclude ?? []), ...existingTitles]));
     const isDuplicate = (r: any) =>
       existingNorm.has(normalizeTitle(r.title)) || existingSigs.has(recipeSignature(r));
+
+    // Inspiration : on récupère les recettes les mieux notées par la famille
+    // pour guider l'IA vers leurs goûts (sans copier les titres existants).
+    const { data: cooked } = await supabase
+      .from("cooked_history")
+      .select("taste_rating, family_loved, recipes(title, protein, cuisine_style)")
+      .eq("user_id", userId)
+      .order("cooked_at", { ascending: false })
+      .limit(40);
+    const tasteHint = buildTasteHint(cooked ?? []);
+    const combinedHint = [data.hint, tasteHint].filter(Boolean).join(" — ");
+
     let kept = await generateBatchOnce({
       apiKey,
       appliance: data.appliance,
@@ -391,7 +403,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       servings,
       family_name,
       exclude,
-      hint: data.hint,
+      hint: combinedHint || undefined,
     });
     kept = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0 && !isDuplicate(r));
     // Top up if filter removed some
@@ -404,7 +416,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
         servings,
         family_name,
         exclude: [...exclude, ...kept.map((r) => r.title)],
-        hint: data.hint,
+        hint: combinedHint || undefined,
       });
       for (const r of more) {
         if (kept.length >= 4) break;

@@ -491,7 +491,15 @@ export const listRecipes = createServerFn({ method: "GET" })
 export const listMyRecipes = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (input: { search?: string; protein?: string; cuisine?: string; maxTime?: number } | undefined) =>
+    (input:
+      | {
+          search?: string;
+          protein?: string;
+          cuisine?: string;
+          maxTime?: number;
+          sort?: "recent" | "rated" | "loved" | "todo";
+        }
+      | undefined) =>
       input ?? {},
   )
   .handler(async ({ data, context }) => {
@@ -502,15 +510,75 @@ export const listMyRecipes = createServerFn({ method: "GET" })
         "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories",
       )
       .eq("owner_id", userId)
-      .order("created_at", { ascending: false })
       .limit(120);
-    if (data?.search) query = query.ilike("title", `%${data.search}%`);
+    if (data?.search) {
+      const q = `%${data.search}%`;
+      // recherche dans le titre, la description, les légumes et les ingrédients (jsonb -> text)
+      query = query.or(
+        `title.ilike.${q},description.ilike.${q},protein.ilike.${q},cuisine_style.ilike.${q},ingredients.cs.[{"name":"${data.search}"}]`,
+      );
+    }
     if (data?.protein) query = query.eq("protein", data.protein);
     if (data?.cuisine) query = query.eq("cuisine_style", data.cuisine);
     if (data?.maxTime) query = query.lte("prep_time", data.maxTime);
-    const { data: rows, error } = await query;
+    const { data: rows, error } = await query.order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
-    return rows ?? [];
+    const recipes = rows ?? [];
+    if (!recipes.length) return [];
+
+    // Récupère les notes (cooked_history) pour ces recettes
+    const ids = recipes.map((r) => r.id);
+    const { data: history } = await supabase
+      .from("cooked_history")
+      .select("recipe_id, taste_rating, ease_rating, family_loved, cooked_at")
+      .eq("user_id", userId)
+      .in("recipe_id", ids);
+
+    const stats = new Map<
+      string,
+      { taste: number; ease: number; cooked: number; loved: boolean; lastCookedAt: string | null }
+    >();
+    for (const h of history ?? []) {
+      const s = stats.get(h.recipe_id) ?? { taste: 0, ease: 0, cooked: 0, loved: false, lastCookedAt: null };
+      s.taste += Number(h.taste_rating ?? 0);
+      s.ease += Number(h.ease_rating ?? 0);
+      s.cooked += 1;
+      s.loved = s.loved || !!h.family_loved;
+      if (!s.lastCookedAt || (h.cooked_at && h.cooked_at > s.lastCookedAt)) {
+        s.lastCookedAt = h.cooked_at ?? null;
+      }
+      stats.set(h.recipe_id, s);
+    }
+
+    const enriched = recipes.map((r) => {
+      const s = stats.get(r.id);
+      const cooked = s?.cooked ?? 0;
+      return {
+        ...r,
+        cooked_count: cooked,
+        avg_taste: s && cooked ? Math.round((s.taste / cooked) * 10) / 10 : null,
+        avg_ease: s && cooked ? Math.round((s.ease / cooked) * 10) / 10 : null,
+        family_loved: s?.loved ?? false,
+        last_cooked_at: s?.lastCookedAt ?? null,
+      };
+    });
+
+    const sort = data?.sort ?? "recent";
+    if (sort === "rated") {
+      enriched.sort((a, b) => (b.avg_taste ?? -1) - (a.avg_taste ?? -1));
+    } else if (sort === "loved") {
+      enriched.sort((a, b) => Number(b.family_loved) - Number(a.family_loved) || (b.avg_taste ?? -1) - (a.avg_taste ?? -1));
+    } else if (sort === "todo") {
+      // jamais cuisinées d'abord, sinon les plus anciennement cuisinées
+      enriched.sort((a, b) => {
+        if (a.cooked_count === 0 && b.cooked_count > 0) return -1;
+        if (b.cooked_count === 0 && a.cooked_count > 0) return 1;
+        const al = a.last_cooked_at ?? "";
+        const bl = b.last_cooked_at ?? "";
+        return al.localeCompare(bl);
+      });
+    }
+    return enriched;
   });
 
 export const getRecipe = createServerFn({ method: "GET" })

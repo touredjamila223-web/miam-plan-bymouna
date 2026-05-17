@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
-import { generateText } from "ai";
+import { generateObject, generateText } from "ai";
 import { violatesRestrictions, normalizeTitle, recipeSignature, isSimilarRecipe } from "./recipes.functions";
 
 
@@ -23,6 +23,20 @@ async function generateJson<T>(opts: {
   schema: z.ZodType<T, z.ZodTypeDef, any>;
   maxOutputTokens?: number;
 }) {
+  try {
+    const { object } = await generateObject({
+      model: opts.model,
+      system: opts.system,
+      prompt: opts.prompt,
+      schema: opts.schema,
+      temperature: 0.4,
+      maxOutputTokens: opts.maxOutputTokens ?? 5000,
+    });
+    return object as T;
+  } catch (structuredError) {
+    console.error("Structured planning generation failed, falling back to JSON text", structuredError);
+  }
+
   const { text } = await generateText({
     model: opts.model,
     system: `${opts.system}\n\nRéponds uniquement avec du JSON valide, sans Markdown, sans commentaire, sans texte avant ou après.`,

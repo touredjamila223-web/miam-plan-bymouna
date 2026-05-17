@@ -80,7 +80,23 @@ function Profil() {
 
       <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
         <div><Label>Nom de la famille</Label><Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Famille Dupont"/></div>
-        <div><Label>Nombre de personnes</Label><Input type="number" min={1} max={20} value={size} onChange={(e) => setSize(parseInt(e.target.value || "4"))}/></div>
+        <div>
+          <Label>Nombre de personnes</Label>
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={20}
+            value={size}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "") { setSize(0 as any); return; }
+              const n = parseInt(v, 10);
+              if (!Number.isNaN(n)) setSize(Math.min(20, Math.max(1, n)));
+            }}
+            onBlur={() => { if (!size || size < 1) setSize(1); }}
+          />
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-5">

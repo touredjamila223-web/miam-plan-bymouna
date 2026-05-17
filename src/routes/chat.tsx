@@ -267,6 +267,37 @@ function Chat() {
                   </div>
                 );
               }
+              if (p.type === "tool-askAppliance") {
+                if (p.state === "output-available") {
+                  const out = p.output as { question: string; options: { id: string; label: string }[] };
+                  return (
+                    <div key={i} className="bg-card border border-border rounded-2xl p-4 space-y-3">
+                      <div className="text-sm">{out.question}</div>
+                      <div className="flex flex-wrap gap-2">
+                        {out.options.map((o) => (
+                          <Button
+                            key={o.id}
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              sendMessage({ text: `Utilise ${o.label} (id: ${o.id}).` })
+                            }
+                            disabled={status === "streaming" || status === "submitted"}
+                          >
+                            {o.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={i} className="bg-card border border-border rounded-2xl p-4 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    Leia prépare les options…
+                  </div>
+                );
+              }
               return null;
             })}
           </div>

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { APPLIANCES } from "@/lib/constants";
 import { Sparkles, Clock, Users, Flame, Carrot, Drumstick, RefreshCw, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
+import { StrictDietBanner } from "@/components/strict-diet-banner";
 
 export const Route = createFileRoute("/generer")({
   head: () => ({ meta: [{ title: "Générer des recettes — MiamPlan" }] }),
@@ -64,6 +65,7 @@ function Generer() {
         <h1 className="text-3xl font-bold flex items-center gap-2"><Sparkles className="w-7 h-7 text-primary"/>Générer des recettes</h1>
         <p className="text-muted-foreground mt-1">Choisis ton appareil, l'IA te propose 4 recettes variées et cohérentes adaptées à tes préférences.</p>
       </div>
+      <StrictDietBanner />
 
       <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
         <div className="grid md:grid-cols-2 gap-4">

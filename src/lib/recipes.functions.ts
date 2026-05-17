@@ -548,7 +548,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
     const tasteHint = buildTasteHint(cooked ?? []);
     const combinedHint = [data.hint, tasteHint].filter(Boolean).join(" — ");
 
-    let kept = await generateBatchOnce({
+    const kept = await generateBatchOnce({
       apiKey,
       appliance: data.appliance,
       restrictions,
@@ -557,31 +557,10 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       exclude,
       hint: combinedHint || undefined,
     });
-    kept = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0 && !isDuplicate(r));
-    // Top up if filter removed some
-    let safety = 0;
-    while (kept.length < 4 && safety < 3) {
-      const more = await generateBatchOnce({
-        apiKey,
-        appliance: data.appliance,
-        restrictions,
-        servings,
-        family_name,
-        exclude: [...exclude, ...kept.map((r) => r.title)],
-        hint: combinedHint || undefined,
-      });
-      for (const r of more) {
-        if (kept.length >= 4) break;
-        if (violatesRestrictions(r, restrictions).length > 0) continue;
-        if (isDuplicate(r)) continue;
-        if (kept.some((k) => isSimilarRecipe(k, r))) continue;
-        kept.push(r);
-      }
-      safety += 1;
-    }
+    const valid = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0 && !isDuplicate(r));
     // Filtre intra-lot final : enlève les variantes proches entre elles
-    const unique: typeof kept = [];
-    for (const r of kept) {
+    const unique: typeof valid = [];
+    for (const r of valid) {
       if (unique.some((k) => isSimilarRecipe(k, r))) continue;
       unique.push(r);
     }

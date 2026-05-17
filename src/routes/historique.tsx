@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listCookedHistory } from "@/lib/cooking.functions";
 import { useAuth } from "@/hooks/use-auth";
+import { Skeleton } from "@/components/ui/skeleton";
 import { History, Star, Heart, ChefHat } from "lucide-react";
 
 export const Route = createFileRoute("/historique")({
@@ -13,7 +14,7 @@ export const Route = createFileRoute("/historique")({
 function HistoriquePage() {
   const { user } = useAuth();
   const list = useServerFn(listCookedHistory);
-  const { data: rows } = useQuery({ queryKey: ["history"], queryFn: () => list(), enabled: !!user });
+  const { data: rows, isLoading } = useQuery({ queryKey: ["history"], queryFn: () => list(), enabled: !!user });
 
   if (!user) {
     return (
@@ -33,6 +34,13 @@ function HistoriquePage() {
       </header>
 
       <div className="space-y-3">
+        {isLoading && Array.from({ length: 4 }).map((_, i) => (
+          <div key={`s${i}`} className="bg-card border border-border rounded-2xl p-4 space-y-2">
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-3 w-1/3" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+        ))}
         {(rows ?? []).map((h: any) => (
           <div key={h.id} className="bg-card border border-border rounded-2xl p-4 flex items-start gap-3">
             <ChefHat className="w-5 h-5 text-primary mt-0.5" />

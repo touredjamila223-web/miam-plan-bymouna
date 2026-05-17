@@ -143,19 +143,3 @@ export function generateRecipePdf(recipe: Recipe, servings: number) {
   doc.save(`${safeName}.pdf`);
 }
 
-export async function shareRecipePdf(recipe: Recipe, servings: number): Promise<boolean> {
-  // Build same doc but as Blob, then use Web Share API if available
-  const nav = typeof navigator !== "undefined" ? (navigator as any) : null;
-  if (!nav?.canShare || !nav?.share) return false;
-  try {
-    // Reuse generator but capture blob instead of save
-    // Quick approach: regenerate via internal method
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
-    // Re-run minimal generation by calling generateRecipePdf-like — instead, just call save fallback
-    // For simplicity, call generateRecipePdf which downloads. Returning false means caller should fallback.
-    void doc;
-    return false;
-  } catch {
-    return false;
-  }
-}

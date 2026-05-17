@@ -37,6 +37,12 @@ function RecipeProposalCard({
   const save = useServerFn(saveRecipe);
   const [busy, setBusy] = useState<"save" | "cook" | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const isCompleteRecipe =
+    !!recipe?.title &&
+    Array.isArray(recipe?.ingredients) &&
+    recipe.ingredients.length >= 2 &&
+    Array.isArray(recipe?.steps) &&
+    recipe.steps.length >= 2;
 
   async function persist(): Promise<string> {
     if (savedId) return savedId;
@@ -127,7 +133,7 @@ function RecipeProposalCard({
         )}
       </div>
 
-      <details className="text-sm">
+      <details className="text-sm" open>
         <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
           Voir ingrédients & étapes
         </summary>
@@ -158,15 +164,25 @@ function RecipeProposalCard({
         </div>
       </details>
 
+      {!isCompleteRecipe && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          Leia n’a pas reçu une recette complète. Clique sur “Une autre” pour régénérer une vraie proposition.
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2 pt-1">
-        <Button size="sm" onClick={onSave} disabled={busy !== null || !!savedId}>
-          {busy === "save" ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookmarkPlus className="w-4 h-4" />}
-          {savedId ? "Sauvegardée" : "Sauvegarder"}
-        </Button>
-        <Button size="sm" variant="default" onClick={onCook} disabled={busy !== null}>
-          {busy === "cook" ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChefHat className="w-4 h-4" />}
-          Mode cuisine
-        </Button>
+        {isCompleteRecipe && (
+          <>
+            <Button size="sm" onClick={onSave} disabled={busy !== null || !!savedId}>
+              {busy === "save" ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookmarkPlus className="w-4 h-4" />}
+              {savedId ? "Sauvegardée" : "Sauvegarder"}
+            </Button>
+            <Button size="sm" variant="default" onClick={onCook} disabled={busy !== null}>
+              {busy === "cook" ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChefHat className="w-4 h-4" />}
+              Mode cuisine
+            </Button>
+          </>
+        )}
         <Button size="sm" variant="outline" onClick={onAnother} disabled={busy !== null}>
           <RotateCcw className="w-4 h-4" />
           Une autre
@@ -241,6 +257,13 @@ function Chat() {
               }
               if (p.type === "tool-proposeRecipe") {
                 if (p.state === "output-available") {
+                  if (p.output?.error) {
+                    return (
+                      <div key={i} className="bg-destructive/10 text-destructive rounded-2xl p-4 text-sm">
+                        {p.output.error}
+                      </div>
+                    );
+                  }
                   return (
                     <RecipeProposalCard
                       key={i}

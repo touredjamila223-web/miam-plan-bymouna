@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
-import { generateText } from "ai";
+import { generateObject, generateText } from "ai";
 import { violatesRestrictions, normalizeTitle, recipeSignature, isSimilarRecipe } from "./recipes.functions";
 
 
@@ -23,6 +23,20 @@ async function generateJson<T>(opts: {
   schema: z.ZodType<T, z.ZodTypeDef, any>;
   maxOutputTokens?: number;
 }) {
+  try {
+    const { object } = await generateObject({
+      model: opts.model,
+      system: opts.system,
+      prompt: opts.prompt,
+      schema: opts.schema,
+      temperature: 0.4,
+      maxOutputTokens: opts.maxOutputTokens ?? 5000,
+    });
+    return object as T;
+  } catch (structuredError) {
+    console.error("Structured planning generation failed, falling back to JSON text", structuredError);
+  }
+
   const { text } = await generateText({
     model: opts.model,
     system: `${opts.system}\n\nRéponds uniquement avec du JSON valide, sans Markdown, sans commentaire, sans texte avant ou après.`,
@@ -348,26 +362,81 @@ export const clearCheckedShopping = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const shoppingGenSchema = z.object({
+function normalizeShoppingOutput(raw: unknown) {
+  if (!raw || typeof raw !== "object") return raw;
+  const data = raw as Record<string, any>;
+  if (Array.isArray(data.items)) return data;
+  const source = data.courses ?? data.liste_courses ?? data.shopping_list ?? data.liste;
+  if (!source || typeof source !== "object") return data;
+  const items: any[] = [];
+  for (const [category, rows] of Object.entries(source as Record<string, any>)) {
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      items.push({
+        item: String(row?.item ?? row?.name ?? row?.nom ?? row?.ingredient ?? "").trim(),
+        qty: String(row?.qty ?? row?.quantity ?? row?.quantite ?? row?.quantité ?? "").trim(),
+        category,
+      });
+    }
+  }
+  return { items };
+}
+
+const categoryMap: Record<string, string> = {
+  "fruits et légumes": "Fruits & legumes",
+  "fruits et legumes": "Fruits & legumes",
+  "fruits & légumes": "Fruits & legumes",
+  "fruits & legumes": "Fruits & legumes",
+  legumes: "Fruits & legumes",
+  légumes: "Fruits & legumes",
+  boucherie: "Viandes & poissons",
+  poissonnerie: "Viandes & poissons",
+  "viandes et poissons": "Viandes & poissons",
+  "viandes & poissons": "Viandes & poissons",
+  crémerie: "Cremerie",
+  cremerie: "Cremerie",
+  "produits laitiers": "Cremerie",
+  frais: "Cremerie",
+  epicerie: "Epicerie",
+  épicerie: "Epicerie",
+  boulangerie: "Boulangerie",
+  surgeles: "Surgeles",
+  surgelés: "Surgeles",
+  boissons: "Boissons",
+};
+
+function normalizeCategory(value: unknown) {
+  const raw = String(value ?? "").toLowerCase().trim();
+  const compact = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (categoryMap[raw] || categoryMap[compact]) return categoryMap[raw] ?? categoryMap[compact];
+  if (compact.includes("fruit") || compact.includes("legume") || compact.includes("primeur")) return "Fruits & legumes";
+  if (compact.includes("viande") || compact.includes("poisson") || compact.includes("boucher")) return "Viandes & poissons";
+  if (compact.includes("cremer") || compact.includes("lait") || compact.includes("fromage") || compact.includes("frais")) return "Cremerie";
+  if (compact.includes("epicer")) return "Epicerie";
+  if (compact.includes("boulanger") || compact.includes("pain")) return "Boulangerie";
+  if (compact.includes("surgele")) return "Surgeles";
+  if (compact.includes("boisson")) return "Boissons";
+  return "Autres";
+}
+
+const shoppingGenBaseSchema = z.object({
   items: z
     .array(
       z.object({
-        item: z.string(),
-        qty: z.string(),
-        category: z.enum([
-          "Fruits & legumes",
-          "Viandes & poissons",
-          "Cremerie",
-          "Epicerie",
-          "Boulangerie",
-          "Surgeles",
-          "Boissons",
-          "Autres",
-        ]),
+        item: z.string().min(1),
+        qty: z.string().default(""),
+        category: z.preprocess(
+          normalizeCategory,
+          z.enum(["Fruits & legumes", "Viandes & poissons", "Cremerie", "Epicerie", "Boulangerie", "Surgeles", "Boissons", "Autres"]).default("Autres"),
+        ),
       }),
     )
     .min(1),
 });
+const shoppingGenSchema: z.ZodType<z.infer<typeof shoppingGenBaseSchema>, z.ZodTypeDef, unknown> = z.preprocess(
+  normalizeShoppingOutput,
+  shoppingGenBaseSchema,
+);
 
 export const generateShoppingFromPlan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -407,7 +476,8 @@ export const generateShoppingFromPlan = createServerFn({ method: "POST" })
     const model = gateway("google/gemini-2.5-flash");
     const object = await generateJson({
       model,
-      system: `Tu consolides une liste de courses a partir des recettes prevues. Additionne les quantites identiques, regroupe par categorie de rayon, retire ce qui est deja dans le frigo.`,
+      system: `Tu consolides une liste de courses a partir des recettes prevues. Additionne les quantites identiques, regroupe par categorie de rayon, retire ce qui est deja dans le frigo.
+FORMAT STRICT : retourne uniquement {"items":[{"item":"...","qty":"...","category":"Fruits & legumes|Viandes & poissons|Cremerie|Epicerie|Boulangerie|Surgeles|Boissons|Autres"}]}. N'utilise jamais une clé "courses" ni des catégories comme objets racines.`,
       prompt: `Frigo dispo : ${fridgeStr}.\n\nRecettes prevues :\n${recipes}`,
       schema: shoppingGenSchema,
     });
@@ -426,22 +496,56 @@ export const generateShoppingFromPlan = createServerFn({ method: "POST" })
 
 // ============== BATCH COOKING ==============
 
-const batchSchema = z.object({
+function normalizeBatchOutput(raw: unknown) {
+  if (!raw || typeof raw !== "object") return raw;
+  const data = raw as Record<string, any>;
+  const mealsSource = data.meals ?? data.repas_de_la_semaine ?? data.repas ?? [];
+  const basesSource = data.bases ?? data.preparations_de_base ?? data.préparations_de_base ?? data.preparations ?? [];
+  const stepsSource = data.parallel_steps ?? data.etapes_paralleles ?? data["étapes_parallèles"] ?? data.planning ?? data.deroule ?? [];
+  return {
+    title: String(data.title ?? data.titre ?? "Session batch cooking de la semaine"),
+    total_time: Math.max(60, Math.round(Number(data.total_time ?? data.temps_total ?? data.duree_totale ?? data.durée_totale ?? 150)) || 150),
+    bases: Array.isArray(basesSource)
+      ? basesSource.map((b: any) => ({
+          name: String(b?.name ?? b?.nom ?? b?.title ?? b?.titre ?? "Base préparée"),
+          qty: String(b?.qty ?? b?.quantity ?? b?.quantite ?? b?.quantité ?? "à ajuster"),
+          use_in: Array.isArray(b?.use_in ?? b?.utilise_dans ?? b?.utilisé_dans)
+            ? (b.use_in ?? b.utilise_dans ?? b.utilisé_dans).map(String)
+            : [],
+        }))
+      : [],
+    parallel_steps: Array.isArray(stepsSource)
+      ? stepsSource.map((s: any, index: number) => ({
+          time_block: String(s?.time_block ?? s?.creneau ?? s?.créneau ?? s?.bloc_temps ?? `${index * 30}-${index * 30 + 30} min`),
+          tasks: Array.isArray(s?.tasks ?? s?.taches ?? s?.tâches)
+            ? (s.tasks ?? s.taches ?? s.tâches).map(String)
+            : [String(s?.task ?? s?.description ?? s?.texte ?? "Préparation batch")],
+        }))
+      : [],
+    meals: Array.isArray(mealsSource)
+      ? mealsSource.map((m: any) => ({
+          title: String(m?.title ?? m?.nom_repas ?? m?.name ?? m?.nom ?? "Repas préparé"),
+          day: String(m?.day ?? m?.jour ?? "Semaine"),
+          slot: String(m?.slot ?? m?.moment ?? "soir").toLowerCase().includes("midi") ? "midi" : "soir",
+          finish_steps: Array.isArray(m?.finish_steps ?? m?.etapes_finition ?? m?.étapes_finition)
+            ? (m.finish_steps ?? m.etapes_finition ?? m.étapes_finition).map(String)
+            : [String(m?.finition_rapide ?? m?.finish ?? "Réchauffer et assembler les bases préparées.")],
+        }))
+      : [],
+  };
+}
+
+const batchBaseSchema = z.object({
   title: z.string(),
-  total_time: z.number().int(),
-  bases: z.array(z.object({ name: z.string(), qty: z.string(), use_in: z.array(z.string()) })),
-  parallel_steps: z.array(
-    z.object({ time_block: z.string(), tasks: z.array(z.string()) }),
-  ),
-  meals: z.array(
-    z.object({
-      title: z.string(),
-      day: z.string(),
-      slot: z.enum(["midi", "soir"]),
-      finish_steps: z.array(z.string()),
-    }),
-  ),
+  total_time: z.number().int().min(60).max(240),
+  bases: z.array(z.object({ name: z.string().min(1), qty: z.string(), use_in: z.array(z.string()) })).min(1),
+  parallel_steps: z.array(z.object({ time_block: z.string(), tasks: z.array(z.string()).min(1) })).min(1),
+  meals: z.array(z.object({ title: z.string().min(1), day: z.string(), slot: z.enum(["midi", "soir"]), finish_steps: z.array(z.string()).min(1) })).min(3),
 });
+const batchSchema: z.ZodType<z.infer<typeof batchBaseSchema>, z.ZodTypeDef, unknown> = z.preprocess(
+  normalizeBatchOutput,
+  batchBaseSchema,
+);
 
 export const generateBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -467,7 +571,8 @@ Regles :
 - Cuisiner des BASES (legumes rotis, cereales, proteines, sauces) REUTILISABLES dans plusieurs repas
 - Optimiser : indiquer des etapes PARALLELES par bloc de temps en utilisant plusieurs appareils en meme temps : ${appliances}
 - Chaque repas final doit avoir une identite culinaire (francais/italien/oriental/asiatique/mediterraneen) coherente et juste 5-10 min de finition en semaine
-- Respecter ABSOLUMENT : ${restrictions.join(", ") || "aucune restriction"}`,
+- Respecter ABSOLUMENT : ${restrictions.join(", ") || "aucune restriction"}
+FORMAT STRICT : retourne uniquement {"title":"...","total_time":150,"bases":[{"name":"...","qty":"...","use_in":["..."]}],"parallel_steps":[{"time_block":"0-30 min","tasks":["..."]}],"meals":[{"title":"...","day":"Lundi","slot":"soir","finish_steps":["..."]}]}. N'utilise jamais les clés françaises "titre", "repas_de_la_semaine", "etapes_paralleles".`,
       prompt: `Genere une session batch cooking complete pour la semaine.`,
       schema: batchSchema,
       maxOutputTokens: 7000,

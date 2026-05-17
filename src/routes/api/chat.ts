@@ -37,9 +37,27 @@ Restrictions alimentaires : ${prefs2}.`;
         }
 
         const applianceIds = APPLIANCES.map((a) => a.id);
+        const userApplianceOptions = (userAppliances.length ? userAppliances : applianceIds)
+          .filter((id) => applianceIds.includes(id))
+          .map((id) => ({ id, label: APPLIANCES.find((a) => a.id === id)?.label ?? id }));
 
         const tools = userId
           ? {
+              askAppliance: tool({
+                description:
+                  "À utiliser UNIQUEMENT pour demander à l'utilisateur quel appareil de cuisson il veut utiliser, lorsque l'information manque avant d'appeler proposeRecipe. Affiche des boutons cliquables à l'utilisateur. N'appelle jamais cet outil si l'appareil est déjà connu.",
+                inputSchema: z.object({
+                  question: z
+                    .string()
+                    .min(2)
+                    .max(200)
+                    .describe("Question courte et chaleureuse posée à l'utilisateur, ex: 'Avec quel appareil veux-tu la cuisiner ?'"),
+                }),
+                execute: async ({ question }) => ({
+                  question,
+                  options: userApplianceOptions,
+                }),
+              }),
               proposeRecipe: tool({
                 description:
                   "Génère une proposition de recette complète et structurée pour l'utilisateur, adaptée à un appareil de cuisson précis. À APPELER IMPÉRATIVEMENT dès que tu connais (1) le plat/idée demandé et (2) l'appareil choisi — y compris quand l'utilisateur vient juste de répondre avec un nom d'appareil après ta question. Ne renvoie JAMAIS la recette en texte : utilise UNIQUEMENT cet outil.",
@@ -77,10 +95,11 @@ Restrictions alimentaires : ${prefs2}.`;
 
 Règles IMPÉRATIVES pour les recettes :
 - Dès que l'utilisateur évoque vouloir une recette ou un plat, ne réponds JAMAIS la recette en texte. Utilise l'outil "proposeRecipe".
-- Avant d'appeler l'outil, vérifie quel appareil utiliser. Si l'utilisateur n'a pas précisé, demande-lui en une phrase quel appareil parmi ses appareils disponibles il veut utiliser (propose 2-3 options pertinentes parmi ses appareils). N'invente jamais un appareil qu'il ne possède pas.
-- IMPORTANT : dès que l'utilisateur répond en nommant un appareil (ex : "Cookeo", "Monsieur Cuisine", "Airfryer"...) après ta question, APPELLE IMMÉDIATEMENT proposeRecipe en reprenant comme "prompt" le dernier plat évoqué dans la conversation et en mappant l'appareil sur l'un de ces identifiants : ${applianceIds.join(", ")}. Ne renvoie pas de texte vide.
+- Avant d'appeler proposeRecipe, vérifie quel appareil utiliser. Si l'appareil n'est PAS encore connu, appelle l'outil "askAppliance" (PAS du texte libre) pour proposer des boutons cliquables à l'utilisateur. N'invente jamais un appareil qu'il ne possède pas.
+- Dès que l'utilisateur a confirmé un appareil (par bouton ou par texte ex : "Cookeo", "Monsieur Cuisine", "Airfryer"), APPELLE IMMÉDIATEMENT proposeRecipe en reprenant comme "prompt" le dernier plat évoqué dans la conversation et en mappant l'appareil sur l'un de ces identifiants : ${applianceIds.join(", ")}. Ne renvoie JAMAIS de texte vide.
 - Si l'utilisateur dit "une autre", "propose autre chose", "varie", appelle à nouveau proposeRecipe avec une orientation différente (style culinaire, protéine ou technique différente) en gardant le même appareil sauf indication contraire.
-- Après l'appel à l'outil, contente-toi d'une phrase d'accroche courte ("Voilà ma proposition 🍽️ — tu peux la sauvegarder ou passer en mode cuisine.").
+- Après l'appel à proposeRecipe, contente-toi d'une phrase d'accroche courte ("Voilà ma proposition 🍽️ — tu peux la sauvegarder ou passer en mode cuisine.").
+- Évite d'écrire des questions à choix en texte libre quand un outil "askAppliance" peut le faire à ta place.
 
 Pour les autres conversations (conseils, équivalents d'ingrédients, batch cooking, idées de semaine), réponds normalement en français, de manière concise et conviviale.${ctxBlock}`,
           messages: await convertToModelMessages(messages),

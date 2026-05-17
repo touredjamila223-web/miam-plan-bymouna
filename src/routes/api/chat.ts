@@ -36,7 +36,7 @@ Appareils disponibles : ${appsLabels}.
 Restrictions alimentaires : ${prefs2}.`;
         }
 
-        const applianceIds = APPLIANCES.map((a) => a.id);
+        const applianceIds: string[] = APPLIANCES.map((a) => a.id);
         const userApplianceOptions = (userAppliances.length ? userAppliances : applianceIds)
           .filter((id) => applianceIds.includes(id))
           .map((id) => ({ id, label: APPLIANCES.find((a) => a.id === id)?.label ?? id }));

@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PROTEINS, CUISINE_STYLES } from "@/lib/constants";
+import { PROTEINS, CUISINE_STYLES, APPLIANCES } from "@/lib/constants";
 import { RecipeCompactCard } from "@/components/recipe-compact-card";
 import { Search, X, Sparkles, Trash2 } from "lucide-react";
 
@@ -41,6 +41,7 @@ function Recettes() {
   const [search, setSearch] = useState("");
   const [protein, setProtein] = useState<string>("");
   const [cuisine, setCuisine] = useState<string>("");
+  const [appliance, setAppliance] = useState<string>("");
   const [maxTime, setMaxTime] = useState<string>("0");
   const [sort, setSort] = useState<"recent" | "rated" | "loved" | "todo">("recent");
 
@@ -48,11 +49,12 @@ function Recettes() {
     search: search || undefined,
     protein: protein || undefined,
     cuisine: cuisine || undefined,
+    appliance: appliance || undefined,
     maxTime: maxTime && maxTime !== "0" ? Number(maxTime) : undefined,
     sort,
   };
   const { data } = useQuery({
-    queryKey: ["recipes", search, protein, cuisine, maxTime, sort, !!user],
+    queryKey: ["recipes", search, protein, cuisine, appliance, maxTime, sort, !!user],
     enabled: !!user,
     queryFn: () => listMine({ data: params }),
   });
@@ -93,7 +95,7 @@ function Recettes() {
     });
   }
 
-  const hasFilters = protein || cuisine || (maxTime && maxTime !== "0");
+  const hasFilters = protein || cuisine || appliance || (maxTime && maxTime !== "0");
 
   if (location.pathname !== "/recettes") return <Outlet />;
 
@@ -124,6 +126,13 @@ function Recettes() {
               {CUISINE_STYLES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={appliance} onValueChange={(v) => setAppliance(v === "__all" ? "" : v)}>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Appareil"/></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all">Tous les appareils</SelectItem>
+              {APPLIANCES.map((a) => <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Select value={maxTime} onValueChange={setMaxTime}>
             <SelectTrigger className="w-[140px]"><SelectValue placeholder="Temps"/></SelectTrigger>
             <SelectContent>
@@ -137,7 +146,7 @@ function Recettes() {
             </SelectContent>
           </Select>
           {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={() => { setProtein(""); setCuisine(""); setMaxTime("0"); }}>
+            <Button variant="ghost" size="sm" onClick={() => { setProtein(""); setCuisine(""); setAppliance(""); setMaxTime("0"); }}>
               <X className="w-4 h-4"/>Réinitialiser
             </Button>
           )}

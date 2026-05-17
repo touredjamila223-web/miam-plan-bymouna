@@ -37,6 +37,12 @@ function RecipeProposalCard({
   const save = useServerFn(saveRecipe);
   const [busy, setBusy] = useState<"save" | "cook" | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const isCompleteRecipe =
+    !!recipe?.title &&
+    Array.isArray(recipe?.ingredients) &&
+    recipe.ingredients.length >= 2 &&
+    Array.isArray(recipe?.steps) &&
+    recipe.steps.length >= 2;
 
   async function persist(): Promise<string> {
     if (savedId) return savedId;
@@ -159,11 +165,11 @@ function RecipeProposalCard({
       </details>
 
       <div className="flex flex-wrap gap-2 pt-1">
-        <Button size="sm" onClick={onSave} disabled={busy !== null || !!savedId}>
+        <Button size="sm" onClick={onSave} disabled={!isCompleteRecipe || busy !== null || !!savedId}>
           {busy === "save" ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookmarkPlus className="w-4 h-4" />}
           {savedId ? "Sauvegardée" : "Sauvegarder"}
         </Button>
-        <Button size="sm" variant="default" onClick={onCook} disabled={busy !== null}>
+        <Button size="sm" variant="default" onClick={onCook} disabled={!isCompleteRecipe || busy !== null}>
           {busy === "cook" ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChefHat className="w-4 h-4" />}
           Mode cuisine
         </Button>

@@ -133,6 +133,7 @@ const fridgeRecipeBaseSchema = z.object({
   ingredients: z.array(z.object({ name: z.string(), qty: z.string() })).min(2),
   steps: z.array(z.object({ text: z.string(), timer_minutes: z.number().int().min(0).optional() })).min(2),
   missing_ingredients: z.array(z.string()).default([]),
+  feasibility: z.number().int().min(0).max(100).optional(),
 });
 type FridgeRecipe = z.infer<typeof fridgeRecipeBaseSchema>;
 const fridgeRecipeSchema: z.ZodType<FridgeRecipe, z.ZodTypeDef, unknown> = z.preprocess(
@@ -181,6 +182,7 @@ Regles ABSOLUES :
 - Portions : ${servings}.
 - Quantites : exprime TOUJOURS les "qty" en grammes (ex "200 g") ou millilitres (ex "150 ml"). Utilise "unites" ou "pincee" seulement quand impossible a peser.
 - Indiquer les ingredients MANQUANTS a acheter (le moins possible) dans "missing_ingredients".
+- Pour CHAQUE recette, calcule un score "feasibility" (0-100) reflétant le pourcentage d'ingrédients déjà présents dans le frigo (en excluant le sel/poivre/huile/eau qu'on considère toujours dispo). Une recette 100% faisable = aucun ingrédient à acheter, 60% = il manque environ 4 ingrédients sur 10, etc. Sois honnête, ne triche pas.
 - prep_time = duree totale realiste (varier selon le type de recette).
 - Renseigner ingredients (avec qty), steps (avec timer_minutes), protein, vegetables, calories.
 Reponds : {"suggestions":[ 4 recettes completes ]}.`,
@@ -200,6 +202,8 @@ Reponds : {"suggestions":[ 4 recettes completes ]}.`,
       if (unique.some((k) => isSimilarRecipe(k, r))) continue;
       unique.push(r);
     }
+    // Tri par faisabilité décroissante : les recettes les plus réalisables avec le frigo en tête
+    unique.sort((a, b) => (b.feasibility ?? 0) - (a.feasibility ?? 0));
     return unique;
   });
 

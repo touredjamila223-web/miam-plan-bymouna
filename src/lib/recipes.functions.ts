@@ -323,7 +323,8 @@ Règles ABSOLUES :
   N'écris JAMAIS "cuire à feu moyen" sans préciser l'intensité chiffrée ou la température. N'invente JAMAIS de programme inexistant (ex : "Dorer" sur Cookeo Smart Wifi = utilise "Rissolage").
 - ÉTAPES DÉTAILLÉES : produis 6 à 10 étapes, chacune en 1–3 phrases. Décris le geste (couper en cubes de 2 cm, émincer finement, mélanger jusqu'à liaison…), l'indice visuel/sonore de réussite (jusqu'à coloration dorée, jusqu'à ce que l'oignon devienne translucide, jusqu'au sifflement…), et toute astuce utile (déglacer, gratter les sucs, racler les bords de la cuve…). Évite les étapes vagues type "faire cuire" sans contexte.
 - Étapes claires, numérotées implicitement, avec timer en minutes quand il y a une cuisson minutée.
-- Tout doit être en français.`;
+- Tout doit être en français.
+- FORMAT DE SORTIE STRICT : un seul objet JSON avec EXACTEMENT ces clés racines en anglais : title, description, cuisine_style, difficulty, prep_time, servings, appliance, protein, vegetables, calories, ingredients, steps, missing_ingredients. Dans ingredients, chaque entrée = {"name":"...","qty":"..."}. Dans steps, chaque entrée = {"text":"...","timer_minutes":0,"appliance_settings":"..."}. N'utilise jamais les clés françaises "titre", "ingrédients", "étapes", "quantité".`;
 }
 
 const generateInput = z.object({

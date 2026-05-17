@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { saveOnboarding, getFamilyContext } from "@/lib/family.functions";
 import { useAuth } from "@/hooks/use-auth";
@@ -32,8 +32,10 @@ function Profil() {
 
   const { data: ctx } = useQuery({ queryKey: ["family-ctx"], queryFn: () => getCtx(), enabled: !!user });
 
+  const hydrated = useRef(false);
   useEffect(() => {
-    if (ctx) {
+    if (ctx && !hydrated.current) {
+      hydrated.current = true;
       setFamilyName(ctx.profile?.family_name ?? "");
       setSize(ctx.profile?.household_size ?? 4);
       setApps(ctx.appliances ?? []);

@@ -60,6 +60,65 @@ export function normalizeTitle(t: string): string {
     .trim();
 }
 
+const PANTRY = new Set([
+  "sel","poivre","huile","eau","ail","oignon","oignons","echalote","echalotes",
+  "beurre","sucre","farine","persil","coriandre","basilic","thym","laurier",
+  "cumin","paprika","curry","piment","vinaigre","citron","bouillon","epices",
+  "sauce","creme","lait","moutarde","miel","gingembre","ras","mix","mélange",
+]);
+
+function normWord(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Signature stable d'une recette : protéine + ingrédients clés normalisés
+ * (hors ingrédients de garde-manger). Permet de détecter des doublons
+ * même quand le titre diffère.
+ */
+export function recipeSignature(r: any): string {
+  const protein = normWord(r?.protein ?? "").split(" ")[0] ?? "";
+  const ings: string[] = Array.isArray(r?.ingredients) ? r.ingredients : [];
+  const veg: string[] = Array.isArray(r?.vegetables) ? r.vegetables : [];
+  const tokens = new Set<string>();
+  for (const i of ings) {
+    const name = typeof i === "string" ? i : (i?.name ?? "");
+    const first = normWord(name).split(" ").find((w) => w.length > 2 && !PANTRY.has(w));
+    if (first) tokens.add(first);
+  }
+  for (const v of veg) {
+    const first = normWord(v).split(" ").find((w) => w.length > 2 && !PANTRY.has(w));
+    if (first) tokens.add(first);
+  }
+  const keys = Array.from(tokens).sort().slice(0, 6).join(",");
+  return `${protein}|${keys}`;
+}
+
+export function isSimilarRecipe(a: any, b: any): boolean {
+  if (normalizeTitle(a?.title ?? "") === normalizeTitle(b?.title ?? "")) return true;
+  const sa = recipeSignature(a);
+  const sb = recipeSignature(b);
+  if (!sa || !sb) return false;
+  if (sa === sb) return true;
+  // overlap ≥ 4 tokens clés + même protéine → considéré comme variante
+  const [pa, ta] = sa.split("|");
+  const [pb, tb] = sb.split("|");
+  if (pa && pa === pb) {
+    const setA = new Set(ta.split(",").filter(Boolean));
+    const setB = new Set(tb.split(",").filter(Boolean));
+    let overlap = 0;
+    for (const t of setA) if (setB.has(t)) overlap += 1;
+    if (overlap >= 4) return true;
+  }
+  return false;
+}
+
 async function generateJson<T>(opts: {
   model: any;
   system: string;

@@ -3,14 +3,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { listMyRecipes, deleteRecipe } from "@/lib/recipes.functions";
+import { listMyRecipes, deleteRecipe, listRecipeIdsForRefresh, refreshRecipeSteps } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PROTEINS, CUISINE_STYLES, APPLIANCES } from "@/lib/constants";
 import { RecipeCompactCard } from "@/components/recipe-compact-card";
-import { Search, X, Sparkles, Trash2 } from "lucide-react";
+import { Search, X, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/recettes")({
   head: () => ({ meta: [{ title: "Bibliothèque de recettes — MiamPlan" }] }),
@@ -36,6 +37,8 @@ function Recettes() {
   const location = useLocation();
   const listMine = useServerFn(listMyRecipes);
   const removeFn = useServerFn(deleteRecipe);
+  const listIdsFn = useServerFn(listRecipeIdsForRefresh);
+  const refreshFn = useServerFn(refreshRecipeSteps);
   const qc = useQueryClient();
   const { user } = useAuth();
   const [search, setSearch] = useState("");
@@ -44,6 +47,44 @@ function Recettes() {
   const [appliance, setAppliance] = useState<string>("");
   const [maxTime, setMaxTime] = useState<string>("0");
   const [sort, setSort] = useState<"recent" | "rated" | "loved" | "todo">("recent");
+  const [bulk, setBulk] = useState<{ running: boolean; done: number; total: number; failed: number }>({
+    running: false, done: 0, total: 0, failed: 0,
+  });
+
+  async function bulkRefreshSteps() {
+    if (bulk.running) return;
+    const ok = window.confirm(
+      "Régénérer les étapes détaillées et réglages appareil de TOUTES tes recettes ? Cela peut prendre quelques minutes et consomme du crédit IA.",
+    );
+    if (!ok) return;
+    try {
+      const items = await listIdsFn();
+      if (!items.length) {
+        toast.info("Aucune recette à mettre à jour");
+        return;
+      }
+      setBulk({ running: true, done: 0, total: items.length, failed: 0 });
+      let done = 0;
+      let failed = 0;
+      for (const it of items) {
+        try {
+          await refreshFn({ data: { id: it.id } });
+        } catch (e) {
+          failed += 1;
+          console.error("refresh failed", it.title, e);
+        }
+        done += 1;
+        setBulk((b) => ({ ...b, done, failed }));
+      }
+      qc.invalidateQueries({ queryKey: ["recipes"] });
+      qc.invalidateQueries({ queryKey: ["recipe"] });
+      toast.success(`Mise à jour terminée : ${done - failed}/${items.length} recettes`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Erreur durant la mise à jour");
+    } finally {
+      setBulk((b) => ({ ...b, running: false }));
+    }
+  }
 
   const params = {
     search: search || undefined,
@@ -102,8 +143,26 @@ function Recettes() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold mb-2">Bibliothèque</h1>
-        <p className="text-muted-foreground">Toutes nos recettes adaptées à vos appareils et préférences.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Bibliothèque</h1>
+            <p className="text-muted-foreground">Toutes nos recettes adaptées à vos appareils et préférences.</p>
+          </div>
+          {user && (
+            <Button variant="outline" size="sm" onClick={bulkRefreshSteps} disabled={bulk.running}>
+              <Wand2 className="w-4 h-4" />
+              {bulk.running ? `Mise à jour ${bulk.done}/${bulk.total}…` : "Mettre à jour les étapes (IA)"}
+            </Button>
+          )}
+        </div>
+        {bulk.running && (
+          <div className="mt-3 space-y-1">
+            <Progress value={bulk.total ? (bulk.done / bulk.total) * 100 : 0} />
+            <p className="text-xs text-muted-foreground">
+              {bulk.done}/{bulk.total} traitées{bulk.failed ? ` — ${bulk.failed} échec(s)` : ""}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="space-y-3">

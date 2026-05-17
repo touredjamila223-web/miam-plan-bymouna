@@ -454,7 +454,7 @@ const saveSchema = recipeBaseSchema.extend({
   source: z.string().default("ai"),
 });
 
-const batchSchema = z.object({ recipes: z.array(recipeSchema).length(4) });
+const batchSchema = z.object({ recipes: z.array(recipeSchema).min(3).max(4) });
 
 const batchInput = z.object({
   appliance: z.string().min(2).max(50),
@@ -465,14 +465,14 @@ const batchInput = z.object({
 });
 
 function buildBatchPrompt(exclude: string[], hint?: string) {
-  return `Propose 4 recettes VARIÉES et savoureuses pour le repas familial.
+  return `Propose 3 recettes VARIÉES et savoureuses pour le repas familial.
 Contraintes :
-- Chaque recette doit avoir une identité culinaire claire et différente des autres autant que possible (varie les styles : ex. un français, un asiatique, un méditerranéen, un oriental).
-- PROTÉINES : pas plus de 2 recettes avec la même protéine principale parmi les 4. Varie au maximum.
+- Chaque recette doit avoir une identité culinaire claire et différente des autres autant que possible (varie les styles : ex. un français, un asiatique, un méditerranéen).
+- PROTÉINES : pas plus de 2 recettes avec la même protéine principale parmi les 3. Varie au maximum.
 - Chaque recette doit être cohérente : protéine + légumes + sauce + épices + accompagnement forment un ensemble harmonieux.
 - Évite ces titres déjà vus : ${exclude.length ? exclude.join(", ") : "aucun"}.
 ${hint ? `- Préférence utilisateur : ${hint}` : ""}
-Réponds avec un objet { recipes: [4 recettes complètes] }.`;
+Réponds avec un objet { recipes: [3 recettes complètes] }.`;
 }
 
 async function generateBatchOnce(opts: {
@@ -564,7 +564,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       if (unique.some((k) => isSimilarRecipe(k, r))) continue;
       unique.push(r);
     }
-    return unique.slice(0, 4);
+    return unique.slice(0, 3);
   });
 
 export const deleteRecipe = createServerFn({ method: "POST" })

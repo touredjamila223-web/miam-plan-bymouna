@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getRecipe, toggleFavorite } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Heart, Clock, Users, ChefHat, ArrowLeft, Play, Flame, Drumstick, Carrot } from "lucide-react";
+import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/recettes/$id")({
@@ -33,11 +33,7 @@ function RecipeDetail() {
     <div className="space-y-6 max-w-3xl mx-auto">
       <Link to="/recettes" className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1"><ArrowLeft className="w-4 h-4"/>Bibliothèque</Link>
 
-      <div className="aspect-[16/9] bg-gradient-to-br from-accent/40 to-secondary/40 rounded-3xl flex items-center justify-center">
-        <ChefHat className="w-20 h-20 text-primary/40"/>
-      </div>
-
-      <div>
+      <div className="bg-card border border-border rounded-2xl p-4 md:p-5">
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mb-2">
           <span className="bg-secondary/50 px-2 py-1 rounded-full text-xs">{r.cuisine_style}</span>
           {r.protein && <span className="bg-accent/40 px-2 py-1 rounded-full text-xs inline-flex items-center gap-1"><Drumstick className="w-3 h-3"/>{r.protein}</span>}

@@ -271,16 +271,17 @@ Règles ABSOLUES :
   }.
 - Portions : ${ctx.servings} personnes.
 - Appareil de cuisson : ${ctx.appliance}. Pour CHAQUE étape de cuisson, renseigne le champ "appliance_settings" avec **le mode ET l'intensité précise** pour guider l'utilisateur :
-  * Cookeo : programme (Mijotage / Cuisson rapide sous pression / Dorer / Vapeur / Réchauffage) + intensité (ex : "Dorer 130°C", "Cuisson rapide sous pression 20 min", "Mijotage 95°C") + liquide minimum (250 ml).
-  * Airfryer : température en °C (160-200°C) + durée + intensité ventilation si dispo + "secouer à mi-cuisson".
+  * Cookeo Smart Wifi : nomme EXACTEMENT le programme officiel : "Rissolage" (et non "Dorer"), "Mijotage", "Cuisson sous pression", "Cuisson vapeur", "Réchauffage", "Maintien au chaud", "Manuel". Pour Rissolage, Mijotage et Cuisson sous pression, précise TOUJOURS l'intensité : **doux**, **moyen** ou **fort** (ex : "Rissolage intensité moyen 5 min", "Cuisson sous pression intensité fort 15 min", "Mijotage intensité doux 25 min"). Indique le couvercle (ouvert pour rissolage, fermé verrouillé pour pression) et le liquide minimum requis pour la pression (≥ 250 ml).
+  * Monsieur Cuisine Smart (Lidl) : précise programme/mode (Pétrissage, Mijotage, Vapeur Varoma, Sauté, Sous-vide, Fermentation, ou Manuel), **vitesse 1 à 10** (ou Turbo), **température en °C** (37–130 °C, ou "Varoma" pour la vapeur), **durée**, et **sens des pales** (normal ou inverse pour préserver les morceaux). Ex : "Mode Sauté, vitesse 1 sens inverse, 120 °C, 8 min" ou "Vapeur Varoma, vitesse 2, 20 min".
+  * Airfryer : température °C (160–200 °C) + durée + "secouer le panier à mi-cuisson" + préchauffage 3 min si applicable.
   * Four : préchauffage + mode (chaleur tournante / statique / grill) + température °C + position grille (bas / milieu / haut) + durée.
-  * Cocotte-minute : feu vif jusqu'à sifflement puis feu doux + durée après mise en pression.
+  * Cocotte-minute : feu vif jusqu'à sifflement de la soupape, puis feu doux + durée après mise en pression + libération vapeur (rapide / naturelle).
   * Poêle : intensité feu (vif 8/9, moyen 5/6, doux 3/4) + matière grasse + durée par face.
-  * Wok : feu très vif (9/9) + huile fumante + durée courte par poignée d'ingrédients.
-  * Casserole : intensité (vif/moyen/doux + chiffre 1-9 si plaque) + couvert ou non + durée.
-  * Monsieur Cuisine / Thermomix : programme + vitesse (1-10) + température °C + durée + sens des pales (normal / inverse).
-  * Plancha : température (180-250°C) + durée par face.
-  N'écris JAMAIS "cuire à feu moyen" sans préciser l'intensité chiffrée ou la température.
+  * Wok : feu très vif (9/9) + huile fumante + saisie courte par poignée d'ingrédients (1–2 min).
+  * Casserole : intensité (vif/moyen/doux + chiffre 1–9 si plaque) + couvert ou non + durée.
+  * Plancha : température (180–250 °C) + durée par face.
+  N'écris JAMAIS "cuire à feu moyen" sans préciser l'intensité chiffrée ou la température. N'invente JAMAIS de programme inexistant (ex : "Dorer" sur Cookeo Smart Wifi = utilise "Rissolage").
+- ÉTAPES DÉTAILLÉES : produis 6 à 10 étapes, chacune en 1–3 phrases. Décris le geste (couper en cubes de 2 cm, émincer finement, mélanger jusqu'à liaison…), l'indice visuel/sonore de réussite (jusqu'à coloration dorée, jusqu'à ce que l'oignon devienne translucide, jusqu'au sifflement…), et toute astuce utile (déglacer, gratter les sucs, racler les bords de la cuve…). Évite les étapes vagues type "faire cuire" sans contexte.
 - Étapes claires, numérotées implicitement, avec timer en minutes quand il y a une cuisson minutée.
 - Tout doit être en français.`;
 }

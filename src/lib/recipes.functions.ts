@@ -202,32 +202,58 @@ async function generateJson<T>(opts: {
 
 function normalizeRecipe(raw: unknown) {
   if (!raw || typeof raw !== "object") return raw;
-  const r = raw as Record<string, any>;
-  const ingredients = Array.isArray(r.ingredients)
-    ? r.ingredients.map((ing: any) =>
-        typeof ing === "string" ? { name: ing, qty: "" } : { name: String(ing?.name ?? ing?.ingredient ?? ""), qty: String(ing?.qty ?? ing?.quantity ?? "") },
-      )
+  const container = raw as Record<string, any>;
+  const r = (container.recipe ?? container.recette ?? container.proposition ?? container) as Record<string, any>;
+  const ingredientsSource = r.ingredients ?? r["ingrédients"] ?? r.ingredient_list ?? r.liste_ingredients;
+  const ingredients = Array.isArray(ingredientsSource)
+    ? ingredientsSource
+        .map((ing: any) =>
+          typeof ing === "string"
+            ? { name: ing, qty: "à ajuster" }
+            : {
+                name: String(ing?.name ?? ing?.nom ?? ing?.ingredient ?? ing?.ingrédient ?? "").trim(),
+                qty: String(ing?.qty ?? ing?.quantity ?? ing?.quantite ?? ing?.quantité ?? ing?.amount ?? "à ajuster").trim(),
+              },
+        )
+        .filter((ing: any) => ing.name)
     : [];
-  const stepsSource = Array.isArray(r.steps) ? r.steps : Array.isArray(r.instructions) ? r.instructions : [];
-  const steps = stepsSource.map((step: any) =>
-    typeof step === "string"
-      ? { text: step, timer_minutes: 0 }
-      : { text: String(step?.text ?? step?.instruction ?? ""), timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? 0), appliance_settings: step?.appliance_settings ?? step?.settings },
-  );
+  const stepsSource = r.steps ?? r["étapes"] ?? r.etapes ?? r.instructions ?? r.preparation ?? r.préparation;
+  const steps = Array.isArray(stepsSource)
+    ? stepsSource
+        .map((step: any) =>
+          typeof step === "string"
+            ? { text: step, timer_minutes: 0 }
+            : {
+                text: String(step?.text ?? step?.texte ?? step?.instruction ?? step?.description ?? "").trim(),
+                timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? step?.duree_minutes ?? step?.durée_minutes ?? step?.minutes ?? 0) || 0,
+                appliance_settings:
+                  step?.appliance_settings ?? step?.reglage_appareil ?? step?.réglage_appareil ?? step?.settings ?? step?.parametres,
+              },
+        )
+        .filter((step: any) => step.text)
+    : [];
+  const vegetablesSource = r.vegetables ?? r.legumes ?? r["légumes"];
+  const vegetables = Array.isArray(vegetablesSource)
+    ? vegetablesSource.map(String).filter(Boolean)
+    : typeof vegetablesSource === "string"
+      ? vegetablesSource.split(/[,;\n]/).map((v) => v.trim()).filter(Boolean)
+      : [];
   return {
-    title: String(r.title ?? "Recette familiale"),
-    description: String(r.description ?? r.summary ?? r.title ?? "Une recette familiale cohérente et savoureuse."),
-    cuisine_style: String(r.cuisine_style ?? r.cuisine ?? r.origin ?? "familial").toLowerCase(),
-    difficulty: ["facile", "moyen", "difficile"].includes(r.difficulty) ? r.difficulty : "facile",
-    prep_time: Math.max(5, Math.round(Number(r.prep_time ?? r.preparation_time ?? r.total_time ?? r.cook_time ?? 0)) || 25),
-    servings: Number(r.servings ?? 4),
-    appliance: String(r.appliance ?? r.device ?? "cookeo"),
-    protein: String(r.protein ?? r.proteine ?? r.main_protein ?? "végétarien").toLowerCase(),
-    vegetables: Array.isArray(r.vegetables) ? r.vegetables.map(String) : [],
+    title: String(r.title ?? r.titre ?? r.name ?? r.nom ?? "Recette familiale"),
+    description: String(r.description ?? r.summary ?? r.resume ?? r.résumé ?? r.title ?? r.titre ?? "Une recette familiale cohérente et savoureuse."),
+    cuisine_style: String(r.cuisine_style ?? r.style_cuisine ?? r.cuisine ?? r.origin ?? r.origine ?? "familial").toLowerCase(),
+    difficulty: ["facile", "moyen", "difficile"].includes(r.difficulty ?? r.difficulte ?? r.difficulté) ? (r.difficulty ?? r.difficulte ?? r.difficulté) : "facile",
+    prep_time: Math.max(5, Math.round(Number(r.prep_time ?? r.temps_preparation ?? r.temps_préparation ?? r.preparation_time ?? r.total_time ?? r.temps_total ?? r.cook_time ?? 0)) || 25),
+    servings: Number(r.servings ?? r.portions ?? r.personnes ?? 4),
+    appliance: String(r.appliance ?? r.appareil ?? r.device ?? "cookeo"),
+    protein: String(r.protein ?? r.proteine ?? r.protéine ?? r.main_protein ?? "végétarien").toLowerCase(),
+    vegetables,
     calories: Number(r.calories ?? r.kcal ?? 500),
     ingredients,
     steps,
-    missing_ingredients: Array.isArray(r.missing_ingredients) ? r.missing_ingredients.map(String) : [],
+    missing_ingredients: Array.isArray(r.missing_ingredients ?? r.ingredients_manquants)
+      ? (r.missing_ingredients ?? r.ingredients_manquants).map(String)
+      : [],
   };
 }
 

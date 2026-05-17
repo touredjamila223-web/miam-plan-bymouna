@@ -216,9 +216,7 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-2.5-flash");
-    const object = await generateJson<{ suggestions: FridgeRecipe[] }>({
-      model,
-      system: `Tu es un chef qui propose 3 recettes COMPLETES, COHERENTES et VARIEES realisables avec le frigo de la famille.
+    const systemPrompt = `Tu es un chef qui propose 3 recettes COMPLETES, COHERENTES et VARIEES realisables avec le frigo de la famille.
 Regles ABSOLUES :
 - Identite culinaire claire et DIFFERENTE pour chaque recette (francais, italien, oriental, asiatique, mediterraneen, tex-mex, indien, libanais...). Une recette doit sentir son pays/style : tajine marocain = cumin/ras el hanout/citron confit/olives ou fruits secs ; wok asiatique = soja/gingembre/ail/sesame/legumes croquants ; gratin francais = creme/bechamel/fromage/muscade/thym ; tex-mex = cumin/paprika fume/mais/haricots/citron vert.
 - Accords logiques proteine + legumes + sauce + accompagnement. Rien de bancal, pas de melange de styles incoherent.
@@ -232,30 +230,42 @@ Regles ABSOLUES :
 - Pour CHAQUE recette, calcule un score "feasibility" (0-100) reflétant le pourcentage d'ingrédients déjà présents dans le frigo (en excluant le sel/poivre/huile/eau qu'on considère toujours dispo). Une recette 100% faisable = aucun ingrédient à acheter, 60% = il manque environ 4 ingrédients sur 10, etc. Sois honnête, ne triche pas.
 - prep_time = duree totale realiste (varier selon le type de recette).
 - Renseigner ingredients (avec qty), steps (5 a 7 etapes avec timer_minutes et appliance_settings), protein, vegetables, calories.
-Reponds : {"suggestions":[ 3 recettes completes ]}.`,
-      prompt: `Frigo : ${items.join(", ")}. Genere 3 recettes completes, rapides a lire mais dignes d'un bon livre de cuisine.`,
-      schema: suggestionsSchema,
-      maxOutputTokens: 6500,
-    });
-    // 1) On retire d'abord uniquement les recettes qui violent les restrictions alimentaires.
-    const safe = object.suggestions.filter(
-      (s) => violatesRestrictions(s, restrictions).length === 0,
-    );
-    // 2) On essaie d'écarter les doublons exacts par rapport à la bibliothèque.
-    const novel = safe.filter(
-      (s) => !existingNorm.has(normalizeTitle(s.title)) && !existingSigs.has(recipeSignature(s)),
-    );
-    // 3) Dédoublonnage intra-lot (variantes très proches).
-    const dedupSource = novel.length ? novel : safe;
-    const unique: typeof dedupSource = [];
-    for (const r of dedupSource) {
-      if (unique.some((k) => isSimilarRecipe(k, r))) continue;
-      unique.push(r);
+Reponds : {"suggestions":[ 3 recettes completes ]}.`;
+
+    const accumulated: FridgeRecipe[] = [];
+    const maxAttempts = 3;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const variation = attempt === 0
+        ? ""
+        : ` Tentative ${attempt + 1} : propose 3 recettes RADICALEMENT differentes des essais precedents (autres cuisines, autres techniques, autres proteines).`;
+      let object: { suggestions: FridgeRecipe[] };
+      try {
+        object = await generateJson<{ suggestions: FridgeRecipe[] }>({
+          model,
+          system: systemPrompt,
+          prompt: `Frigo : ${items.join(", ")}. Genere 3 recettes completes, rapides a lire mais dignes d'un bon livre de cuisine.${variation}`,
+          schema: suggestionsSchema,
+          maxOutputTokens: 6500,
+        });
+      } catch (err) {
+        if (attempt === maxAttempts - 1 && accumulated.length === 0) throw err;
+        continue;
+      }
+      const safe = object.suggestions.filter(
+        (s) => violatesRestrictions(s, restrictions).length === 0,
+      );
+      const novel = safe.filter(
+        (s) => !existingNorm.has(normalizeTitle(s.title)) && !existingSigs.has(recipeSignature(s)),
+      );
+      const dedupSource = novel.length ? novel : safe;
+      for (const r of dedupSource) {
+        if (accumulated.some((k) => isSimilarRecipe(k, r))) continue;
+        accumulated.push(r);
+      }
+      if (accumulated.length >= 3) break;
     }
-    // 4) Fallback ultime : si tout a été filtré, on renvoie au moins les recettes sûres.
-    const result = unique.length ? unique : safe;
-    result.sort((a, b) => (b.feasibility ?? 0) - (a.feasibility ?? 0));
-    return result;
+    accumulated.sort((a, b) => (b.feasibility ?? 0) - (a.feasibility ?? 0));
+    return accumulated.slice(0, Math.max(3, accumulated.length));
   });
 
 // ============== MEAL PLAN ==============

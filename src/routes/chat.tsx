@@ -15,7 +15,7 @@ import { APPLIANCES } from "@/lib/constants";
 
 export const Route = createFileRoute("/chat")({
   head: () => ({ meta: [{ title: "Leia, votre chef IA — MiamPlan" }] }),
-  component: Chat;
+  component: Chat,
 });
 
 function applianceLabel(id?: string) {

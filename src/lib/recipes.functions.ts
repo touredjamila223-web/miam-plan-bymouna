@@ -221,17 +221,22 @@ Règles ABSOLUES :
 - Renseigne "vegetables" avec la liste des légumes utilisés (3 à 6 entrées, nom simple en minuscules).
 - Renseigne "calories" : estimation honnête des kcal par portion.
 - "prep_time" = temps TOTAL réaliste en minutes (préparation + cuisson). Il DOIT varier selon la recette : un tartare = 10-15 min, un sauté wok = 15-20 min, une poêlée = 20-25 min, un mijoté Cookeo = 25-40 min, un rôti four = 45-90 min, un bourguignon = 90-180 min. N'utilise JAMAIS une valeur par défaut, calcule honnêtement.
+- QUANTITÉS : exprime TOUJOURS les quantités en grammes ("g") pour les solides et en millilitres ("ml") pour les liquides. Format strict du champ "qty" = "<nombre> <unité>" (ex : "200 g", "150 ml", "30 g"). N'utilise "c. à soupe", "c. à café", "pincée", "gousse", "tranche", "unité" QUE pour les ingrédients impossibles à peser (sel, épices, ail). Pour les œufs : "<nombre> unités" (ex : "2 unités"). Jamais de plage ("100-150 g"), donne UNE valeur précise.
 - Préférences alimentaires à respecter ABSOLUMENT (aucun ingrédient interdit) : ${
     ctx.restrictions.length ? ctx.restrictions.join(", ") : "aucune"
   }.
 - Portions : ${ctx.servings} personnes.
-- Appareil de cuisson : ${ctx.appliance}. Adapte chaque étape au fonctionnement RÉEL de cet appareil :
-  * Cookeo : indique programme (Mijotage / Cuisson rapide / Dorer / Vapeur), pression, liquide minimum (250ml), durée.
-  * Airfryer : température en °C, durée en minutes, secouer à mi-cuisson si nécessaire, ne pas surcharger.
-  * Four traditionnel : préchauffage, température, chaleur tournante ou statique, position grille, durée.
-  * Cocotte-minute : feu vif puis doux, durée après mise en pression.
-  * Poêle : feu (vif/moyen/doux), matière grasse, durée par face.
-  * Monsieur Cuisine : programme, vitesse, température, durée, sens des pales.
+- Appareil de cuisson : ${ctx.appliance}. Pour CHAQUE étape de cuisson, renseigne le champ "appliance_settings" avec **le mode ET l'intensité précise** pour guider l'utilisateur :
+  * Cookeo : programme (Mijotage / Cuisson rapide sous pression / Dorer / Vapeur / Réchauffage) + intensité (ex : "Dorer 130°C", "Cuisson rapide sous pression 20 min", "Mijotage 95°C") + liquide minimum (250 ml).
+  * Airfryer : température en °C (160-200°C) + durée + intensité ventilation si dispo + "secouer à mi-cuisson".
+  * Four : préchauffage + mode (chaleur tournante / statique / grill) + température °C + position grille (bas / milieu / haut) + durée.
+  * Cocotte-minute : feu vif jusqu'à sifflement puis feu doux + durée après mise en pression.
+  * Poêle : intensité feu (vif 8/9, moyen 5/6, doux 3/4) + matière grasse + durée par face.
+  * Wok : feu très vif (9/9) + huile fumante + durée courte par poignée d'ingrédients.
+  * Casserole : intensité (vif/moyen/doux + chiffre 1-9 si plaque) + couvert ou non + durée.
+  * Monsieur Cuisine / Thermomix : programme + vitesse (1-10) + température °C + durée + sens des pales (normal / inverse).
+  * Plancha : température (180-250°C) + durée par face.
+  N'écris JAMAIS "cuire à feu moyen" sans préciser l'intensité chiffrée ou la température.
 - Étapes claires, numérotées implicitement, avec timer en minutes quand il y a une cuisson minutée.
 - Tout doit être en français.`;
 }

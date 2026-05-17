@@ -177,8 +177,9 @@ Regles ABSOLUES :
 - Pas plus de 2 recettes avec la meme proteine principale.
 - Respecter ABSOLUMENT les exclusions : ${restrictions.join(", ") || "aucune"}.
 - NE PROPOSE JAMAIS ces titres deja presents dans la bibliotheque de l'utilisateur : ${existingTitles.join(" | ") || "aucun"}. Invente des recettes differentes.
-- Appareils disponibles : ${appliances}. Adapter chaque etape a l'appareil utilise (programme, temperature, duree).
+- Appareils disponibles : ${appliances}. Pour CHAQUE etape, "appliance_settings" doit contenir le mode ET l'intensite precise (programme, temperature en °C, vitesse, position grille, chiffre du feu 1-9, duree). N'ecris jamais "feu moyen" sans chiffre, ni "cuire" sans temperature.
 - Portions : ${servings}.
+- Quantites : exprime TOUJOURS les "qty" en grammes (ex "200 g") ou millilitres (ex "150 ml"). Utilise "unites" ou "pincee" seulement quand impossible a peser.
 - Indiquer les ingredients MANQUANTS a acheter (le moins possible) dans "missing_ingredients".
 - prep_time = duree totale realiste (varier selon le type de recette).
 - Renseigner ingredients (avec qty), steps (avec timer_minutes), protein, vegetables, calories.

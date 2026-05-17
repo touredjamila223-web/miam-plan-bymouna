@@ -553,6 +553,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
           search?: string;
           protein?: string;
           cuisine?: string;
+          appliance?: string;
           maxTime?: number;
           sort?: "recent" | "rated" | "loved" | "todo";
         }
@@ -577,6 +578,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
     }
     if (data?.protein) query = query.eq("protein", data.protein);
     if (data?.cuisine) query = query.eq("cuisine_style", data.cuisine);
+    if (data?.appliance) query = query.eq("appliance", data.appliance);
     if (data?.maxTime) query = query.lte("prep_time", data.maxTime);
     const { data: rows, error } = await query.order("created_at", { ascending: false });
     if (error) throw new Error(error.message);

@@ -94,6 +94,14 @@ Restrictions alimentaires : ${prefs2}.`;
           .filter((id) => applianceIds.includes(id))
           .map((id) => ({ id, label: APPLIANCES.find((a) => a.id === id)?.label ?? id }));
 
+        const lastUserIndex = messages.map((m) => m.role).lastIndexOf("user");
+        const lastUserText = messageText(messages[lastUserIndex]);
+        const selectedAppliance = findApplianceId(lastUserText, applianceIds);
+        const previousDishPrompt = findPreviousDishPrompt(messages, lastUserIndex, applianceIds);
+        const routeDishPrompt = previousDishPrompt || (looksLikeRecipeRequest(lastUserText) ? lastUserText : "");
+        const shouldProposeNow = Boolean(userId && selectedAppliance && routeDishPrompt);
+        const shouldAskApplianceNow = Boolean(userId && !selectedAppliance && looksLikeRecipeRequest(lastUserText));
+
         const tools = userId
           ? {
               askAppliance: tool({
@@ -128,7 +136,8 @@ Restrictions alimentaires : ${prefs2}.`;
                 }),
                 execute: async ({ prompt, appliance }) => {
                   try {
-                    const recipe = await generateRecipeForUser({ userId, prompt, appliance });
+                    const safePrompt = findApplianceId(prompt, applianceIds) && routeDishPrompt ? routeDishPrompt : prompt;
+                    const recipe = await generateRecipeForUser({ userId, prompt: safePrompt, appliance });
                     return recipe;
                   } catch (e: any) {
                     console.error("proposeRecipe failed", e);
@@ -143,6 +152,11 @@ Restrictions alimentaires : ${prefs2}.`;
         const result = streamText({
           model: gateway("google/gemini-2.5-flash"),
           tools,
+          toolChoice: shouldProposeNow
+            ? { type: "tool", toolName: "proposeRecipe" }
+            : shouldAskApplianceNow
+              ? { type: "tool", toolName: "askAppliance" }
+              : "auto",
           stopWhen: stepCountIs(50),
           system: `Tu es Leia, l'assistante culinaire chaleureuse et précise de MiamPlan. Tu aides la famille à cuisiner sainement et à se faire plaisir.
 

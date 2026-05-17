@@ -16,6 +16,41 @@ function extractJsonObject(text: string) {
   return JSON.parse(cleaned.slice(start, end + 1));
 }
 
+const RESTRICTION_KEYWORDS: Record<string, string[]> = {
+  "sans-porc": ["porc","lard","lardon","lardons","jambon","chorizo","bacon","saucisse","saucissons","saucisson","pancetta","speck","coppa","prosciutto","andouille","boudin"],
+  "sans-fruits-de-mer": ["fruits de mer","crevette","crevettes","moule","moules","palourde","huitre","huître","crabe","langoustine","homard","calamar","encornet","seiche","poulpe","gambas","st-jacques","saint-jacques"],
+  "sans-gluten": ["farine de blé","pâtes","semoule","couscous","boulgour","seitan","orge","seigle","épeautre","epeautre"],
+  "sans-lactose": ["lait de vache","beurre","crème","fromage","yaourt","mozzarella","parmesan","ricotta","feta","mascarpone","gruyère","comté","emmental","cheddar","chantilly"],
+  "vegetarien": ["poulet","boeuf","bœuf","veau","agneau","porc","jambon","lard","saucisse","chorizo","bacon","poisson","saumon","thon","cabillaud","crevette","fruits de mer","gésier","foie","canard","dinde"],
+  "vegetalien": ["poulet","boeuf","bœuf","veau","agneau","porc","jambon","lard","saucisse","chorizo","bacon","poisson","saumon","thon","cabillaud","crevette","fruits de mer","lait","beurre","crème","fromage","yaourt","oeuf","œuf","mozzarella","miel"],
+  "sans-noix": ["noix","amande","amandes","noisette","noisettes","pistache","cajou","pécan","macadamia"],
+  "sans-alcool": ["vin","bière","rhum","whisky","cognac","porto","champagne","saké","vodka","gin","kirsch"],
+  "sans-oeuf": ["oeuf","œuf","oeufs","œufs"],
+  "halal": ["porc","lard","lardon","jambon","chorizo","bacon","saucisse","saucisson","vin","bière","rhum","alcool","kirsch","cognac"],
+};
+
+export function violatesRestrictions(recipe: any, restrictions: string[]): string[] {
+  if (!restrictions?.length) return [];
+  const text = [
+    recipe.title, recipe.description,
+    ...(recipe.ingredients ?? []).map((i: any) => `${i.name ?? ""} ${i.qty ?? ""}`),
+    ...(recipe.steps ?? []).map((s: any) => s.text ?? ""),
+    recipe.protein,
+    ...(recipe.vegetables ?? []),
+  ].join(" ").toLowerCase();
+  const found: string[] = [];
+  for (const r of restrictions) {
+    const kws = RESTRICTION_KEYWORDS[r];
+    if (!kws) continue;
+    for (const kw of kws) {
+      const escaped = kw.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+      const re = new RegExp(`(^|[^a-zàâçéèêëîïôûùüÿñæœ])${escaped}([^a-zàâçéèêëîïôûùüÿñæœ]|$)`, "i");
+      if (re.test(text)) { found.push(r); break; }
+    }
+  }
+  return found;
+}
+
 async function generateJson<T>(opts: {
   model: any;
   system: string;
@@ -275,9 +310,10 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       exclude,
       hint: data.hint,
     });
+    kept = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0);
     // Top up if filter removed some
     let safety = 0;
-    while (kept.length < 4 && safety < 2) {
+    while (kept.length < 4 && safety < 3) {
       const more = await generateBatchOnce({
         apiKey,
         appliance: data.appliance,
@@ -289,6 +325,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       });
       for (const r of more) {
         if (kept.length >= 4) break;
+        if (violatesRestrictions(r, restrictions).length > 0) continue;
         kept.push(r);
       }
       safety += 1;
@@ -426,6 +463,22 @@ export const listFavorites = createServerFn({ method: "GET" })
       .eq("user_id", userId);
     if (error) throw new Error(error.message);
     return (data ?? []).map((r) => r.recipes).filter(Boolean);
+  });
+
+export const getUserStats = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const [favs, cooked, prefs] = await Promise.all([
+      supabase.from("favorites").select("recipe_id", { count: "exact", head: true }).eq("user_id", userId),
+      supabase.from("cooked_history").select("id", { count: "exact", head: true }).eq("user_id", userId),
+      supabase.from("dietary_preferences").select("restriction").eq("user_id", userId),
+    ]);
+    return {
+      favorites: favs.count ?? 0,
+      cooked: cooked.count ?? 0,
+      restrictions: (prefs.data ?? []).map((p) => p.restriction),
+    };
   });
 
 export const listCollections = createServerFn({ method: "GET" })

@@ -13,6 +13,8 @@ import { saveRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Refrigerator, Plus, X, Sparkles, RefreshCw, Save, Clock, Flame, Carrot, ChevronDown, ChevronUp } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { StrictDietBanner } from "@/components/strict-diet-banner";
+import { useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/frigo")({
   head: () => ({ meta: [{ title: "Mon frigo — MiamPlan" }] }),
@@ -22,6 +24,7 @@ export const Route = createFileRoute("/frigo")({
 function FrigoPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const list = useServerFn(listFridge);
   const add = useServerFn(addFridgeItem);
   const remove = useServerFn(removeFridgeItem);
@@ -62,7 +65,15 @@ function FrigoPage() {
     setSuggestions(null);
     try {
       const s = await suggest();
+      if (!s?.length) {
+        toast.error("Aucune recette compatible n'a pu être générée. Ajuste tes ingrédients ou tes restrictions.");
+        return;
+      }
       setSuggestions(s);
+      // Pre-select all by default so user can save the whole batch in 1 click
+      const all: Record<number, boolean> = {};
+      s.forEach((_: any, i: number) => { all[i] = true; });
+      setSelected(all);
     } catch (e: any) {
       toast.error(e.message ?? "Erreur");
     } finally { setLoading(false); }
@@ -76,8 +87,25 @@ function FrigoPage() {
       await save({ data: { recipes: picks.map((r) => ({ ...r, source: "ai" })) } });
       toast.success(`${picks.length} recette(s) ajoutée(s) à ta bibliothèque !`);
       qc.invalidateQueries({ queryKey: ["recipes"] });
+      qc.invalidateQueries({ queryKey: ["user-stats"] });
       setSuggestions(null);
       setSelected({});
+      navigate({ to: "/recettes" });
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
+  async function onSaveAll() {
+    if (!suggestions?.length) return;
+    try {
+      await save({ data: { recipes: suggestions.map((r) => ({ ...r, source: "ai" })) } });
+      toast.success(`${suggestions.length} recette(s) ajoutée(s) à ta bibliothèque !`);
+      qc.invalidateQueries({ queryKey: ["recipes"] });
+      qc.invalidateQueries({ queryKey: ["user-stats"] });
+      setSuggestions(null);
+      setSelected({});
+      navigate({ to: "/recettes" });
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -99,6 +127,7 @@ function FrigoPage() {
         <h1 className="text-3xl font-bold flex items-center gap-2"><Refrigerator className="w-7 h-7 text-primary" />Mon frigo</h1>
         <p className="text-muted-foreground">Indiquez ce que vous avez, l'IA propose des recettes adaptées.</p>
       </header>
+      <StrictDietBanner />
 
       <section className="bg-card border border-border rounded-2xl p-4">
         <form
@@ -132,10 +161,11 @@ function FrigoPage() {
             <h2 className="text-xl font-bold">Suggestions</h2>
             <div className="flex gap-2">
               <button onClick={runSuggest} disabled={loading} className="text-sm border border-border px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-50"><RefreshCw className="w-3.5 h-3.5"/>Tout écarter</button>
-              <button onClick={onSaveSelected} disabled={!Object.values(selected).some(Boolean)} className="text-sm bg-primary text-primary-foreground px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-50"><Save className="w-3.5 h-3.5"/>Sauvegarder la sélection</button>
+              <button onClick={onSaveSelected} disabled={!Object.values(selected).some(Boolean)} className="text-sm border border-primary text-primary px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-50"><Save className="w-3.5 h-3.5"/>Ajouter la sélection</button>
+              <button onClick={onSaveAll} className="text-sm bg-primary text-primary-foreground px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"><Save className="w-3.5 h-3.5"/>Tout ajouter à la bibliothèque</button>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">Coche celles qui te plaisent pour les ajouter à ta bibliothèque, puis va les cuisiner.</p>
+          <p className="text-xs text-muted-foreground">Toutes les propositions sont pré-cochées. Décoche celles qui ne te plaisent pas puis ajoute-les à ta bibliothèque, ou « Tout écarter » pour relancer.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {suggestions.map((s, i) => {
               const isSel = !!selected[i];

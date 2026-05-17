@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -47,15 +47,42 @@ function Recettes() {
     enabled: !!user,
     queryFn: () => listMine({ data: params }),
   });
-  const delMut = useMutation({
-    mutationFn: (id: string) => removeFn({ data: { id } }),
-    onSuccess: () => {
-      toast.success("Recette supprimée");
-      qc.invalidateQueries({ queryKey: ["recipes"] });
-      qc.invalidateQueries({ queryKey: ["favorites"] });
-    },
-    onError: (e: any) => toast.error(e.message ?? "Erreur"),
-  });
+
+  function softDelete(r: { id: string; title: string }) {
+    // optimistic remove from all recipes/favorites caches
+    qc.setQueriesData({ queryKey: ["recipes"] }, (old: any) =>
+      Array.isArray(old) ? old.filter((x: any) => x.id !== r.id) : old,
+    );
+    qc.setQueriesData({ queryKey: ["favorites"] }, (old: any) =>
+      Array.isArray(old) ? old.filter((x: any) => x.id !== r.id) : old,
+    );
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      try {
+        await removeFn({ data: { id: r.id } });
+      } catch (e: any) {
+        toast.error(e.message ?? "Erreur de suppression");
+      } finally {
+        qc.invalidateQueries({ queryKey: ["recipes"] });
+        qc.invalidateQueries({ queryKey: ["favorites"] });
+        qc.invalidateQueries({ queryKey: ["user-stats"] });
+      }
+    }, 5000);
+    toast(`« ${r.title} » supprimée`, {
+      duration: 5000,
+      action: {
+        label: "Annuler",
+        onClick: () => {
+          cancelled = true;
+          clearTimeout(timer);
+          qc.invalidateQueries({ queryKey: ["recipes"] });
+          qc.invalidateQueries({ queryKey: ["favorites"] });
+          toast.success("Suppression annulée");
+        },
+      },
+    });
+  }
 
   const hasFilters = protein || cuisine || (maxTime && maxTime !== "0");
 
@@ -112,7 +139,7 @@ function Recettes() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (confirm(`Supprimer "${r.title}" de ta bibliothèque ?`)) delMut.mutate(r.id);
+                  softDelete({ id: r.id, title: r.title });
                 }}
                 className="p-1.5 rounded-full bg-background/80 backdrop-blur border border-border text-muted-foreground hover:text-destructive hover:border-destructive transition"
                 aria-label="Supprimer la recette"

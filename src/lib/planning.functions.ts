@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
 import { generateText } from "ai";
+import { violatesRestrictions } from "./recipes.functions";
 
 
 function extractJsonObject(text: string) {
@@ -181,7 +182,7 @@ Reponds : {"suggestions":[ 4 recettes completes ]}.`,
       schema: suggestionsSchema,
       maxOutputTokens: 9000,
     });
-    return object.suggestions;
+    return object.suggestions.filter((s) => violatesRestrictions(s, restrictions).length === 0);
   });
 
 // ============== MEAL PLAN ==============

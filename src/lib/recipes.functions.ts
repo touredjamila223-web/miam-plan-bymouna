@@ -51,6 +51,15 @@ export function violatesRestrictions(recipe: any, restrictions: string[]): strin
   return found;
 }
 
+export function normalizeTitle(t: string): string {
+  return (t ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 async function generateJson<T>(opts: {
   model: any;
   system: string;

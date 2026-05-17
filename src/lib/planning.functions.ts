@@ -169,13 +169,13 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
     const existingSigs = new Set((existing.data ?? []).map((r: any) => recipeSignature(r)).filter(Boolean));
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
+    const model = gateway("openai/gpt-5-nano");
     const object = await generateJson<{ suggestions: FridgeRecipe[] }>({
       model,
-      system: `Tu es un chef qui propose 4 recettes COMPLETES, COHERENTES et VARIEES realisables avec le frigo de la famille.
+      system: `Tu es un chef qui propose 3 recettes COMPLETES, COHERENTES et VARIEES realisables avec le frigo de la famille.
 Regles ABSOLUES :
-- Identite culinaire claire et DIFFERENTE pour chaque recette (francais, italien, oriental, asiatique, mediterraneen, tex-mex, indien, libanais...).
-- Accords logiques proteine + legumes + sauce + accompagnement.
+- Identite culinaire claire et DIFFERENTE pour chaque recette (francais, italien, oriental, asiatique, mediterraneen, tex-mex, indien, libanais...). Une recette doit sentir son pays/style : tajine marocain = cumin/ras el hanout/citron confit/olives ou fruits secs ; wok asiatique = soja/gingembre/ail/sesame/legumes croquants ; gratin francais = creme/bechamel/fromage/muscade/thym ; tex-mex = cumin/paprika fume/mais/haricots/citron vert.
+- Accords logiques proteine + legumes + sauce + accompagnement. Rien de bancal, pas de melange de styles incoherent.
 - Pas plus de 2 recettes avec la meme proteine principale.
 - Respecter ABSOLUMENT les exclusions : ${restrictions.join(", ") || "aucune"}.
 - NE PROPOSE JAMAIS ces titres deja presents dans la bibliotheque de l'utilisateur : ${existingTitles.join(" | ") || "aucun"}. Invente des recettes differentes.
@@ -185,11 +185,11 @@ Regles ABSOLUES :
 - Indiquer les ingredients MANQUANTS a acheter (le moins possible) dans "missing_ingredients".
 - Pour CHAQUE recette, calcule un score "feasibility" (0-100) reflétant le pourcentage d'ingrédients déjà présents dans le frigo (en excluant le sel/poivre/huile/eau qu'on considère toujours dispo). Une recette 100% faisable = aucun ingrédient à acheter, 60% = il manque environ 4 ingrédients sur 10, etc. Sois honnête, ne triche pas.
 - prep_time = duree totale realiste (varier selon le type de recette).
-- Renseigner ingredients (avec qty), steps (avec timer_minutes), protein, vegetables, calories.
-Reponds : {"suggestions":[ 4 recettes completes ]}.`,
-      prompt: `Frigo : ${items.join(", ")}. Genere 4 recettes completes.`,
+- Renseigner ingredients (avec qty), steps (5 a 7 etapes avec timer_minutes et appliance_settings), protein, vegetables, calories.
+Reponds : {"suggestions":[ 3 recettes completes ]}.`,
+      prompt: `Frigo : ${items.join(", ")}. Genere 3 recettes completes, rapides a lire mais dignes d'un bon livre de cuisine.`,
       schema: suggestionsSchema,
-      maxOutputTokens: 9000,
+      maxOutputTokens: 6500,
     });
     const filtered = object.suggestions.filter(
       (s) =>

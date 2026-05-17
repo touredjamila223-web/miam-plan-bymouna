@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Clock, Flame, Carrot } from "lucide-react";
+import { Clock, Flame, Carrot, Star, Heart } from "lucide-react";
 import type { ReactNode } from "react";
 
 type RecipeCardData = {
@@ -11,6 +11,9 @@ type RecipeCardData = {
   calories?: number | null;
   vegetables?: string[] | null;
   description?: string | null;
+  avg_taste?: number | null;
+  cooked_count?: number | null;
+  family_loved?: boolean | null;
 };
 
 function proteinEmoji(protein?: string | null) {
@@ -59,6 +62,18 @@ export function RecipeCompactCard({
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground">
         {recipe.prep_time != null && <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{recipe.prep_time} min</span>}
         {recipe.calories != null && <span className="inline-flex items-center gap-1"><Flame className="w-3 h-3" />{recipe.calories} kcal</span>}
+        {recipe.avg_taste != null && (
+          <span className="inline-flex items-center gap-0.5 text-amber-600">
+            <Star className="w-3 h-3 fill-current" />
+            <span className="font-semibold tabular-nums">{recipe.avg_taste.toFixed(1)}</span>
+            {recipe.cooked_count ? <span className="text-muted-foreground">({recipe.cooked_count})</span> : null}
+          </span>
+        )}
+        {recipe.family_loved && (
+          <span className="inline-flex items-center gap-0.5 text-rose-500" title="La famille a adoré">
+            <Heart className="w-3 h-3 fill-current" />
+          </span>
+        )}
       </div>
       {vegetables.length > 0 && (
         <p className="text-[11px] text-muted-foreground inline-flex items-start gap-1 line-clamp-1">

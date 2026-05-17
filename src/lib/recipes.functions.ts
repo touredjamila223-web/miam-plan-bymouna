@@ -84,8 +84,8 @@ function normWord(s: string): string {
  */
 export function recipeSignature(r: any): string {
   const protein = normWord(r?.protein ?? "").split(" ")[0] ?? "";
-  const ings: string[] = Array.isArray(r?.ingredients) ? r.ingredients : [];
-  const veg: string[] = Array.isArray(r?.vegetables) ? r.vegetables : [];
+  const ings: any[] = Array.isArray(r?.ingredients) ? r.ingredients : [];
+  const veg: any[] = Array.isArray(r?.vegetables) ? r.vegetables : [];
   const tokens = new Set<string>();
   for (const i of ings) {
     const name = typeof i === "string" ? i : (i?.name ?? "");
@@ -93,7 +93,7 @@ export function recipeSignature(r: any): string {
     if (first) tokens.add(first);
   }
   for (const v of veg) {
-    const first = normWord(v).split(" ").find((w) => w.length > 2 && !PANTRY.has(w));
+    const first = normWord(String(v)).split(" ").find((w) => w.length > 2 && !PANTRY.has(w));
     if (first) tokens.add(first);
   }
   const keys = Array.from(tokens).sort().slice(0, 6).join(",");

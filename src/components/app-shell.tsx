@@ -57,11 +57,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border flex justify-around py-2 z-40">
         {MOBILE_NAV.map((n) => (
-          <Link key={n.to} to={n.to} className="flex flex-col items-center gap-1 px-2 py-1 text-xs" activeProps={{ className: "text-primary" }}>
+          <Link key={n.to} to={n.to} className="flex flex-col items-center gap-1 px-1 py-1 text-[10px] leading-tight" activeProps={{ className: "text-primary" }}>
             <n.icon className="w-5 h-5" />{n.label}
           </Link>
         ))}
-        <Link to="/profil" className="flex flex-col items-center gap-1 px-2 py-1 text-xs" activeProps={{ className: "text-primary" }}>
+        <Link to="/profil" className="flex flex-col items-center gap-1 px-1 py-1 text-[10px] leading-tight" activeProps={{ className: "text-primary" }}>
           <MoreHorizontal className="w-5 h-5" />Plus
         </Link>
       </nav>

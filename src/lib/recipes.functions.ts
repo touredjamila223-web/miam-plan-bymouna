@@ -300,7 +300,15 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
     const restrictions = Array.from(new Set([...(data.restrictions ?? []), ...dbRestrictions]));
     const servings = data.servings ?? profile.data?.household_size ?? 4;
     const family_name = profile.data?.family_name ?? null;
-    const exclude = data.exclude ?? [];
+    const { data: existing } = await supabase
+      .from("recipes")
+      .select("title")
+      .eq("owner_id", userId)
+      .limit(300);
+    const existingTitles = (existing ?? []).map((r) => r.title);
+    const existingNorm = new Set(existingTitles.map(normalizeTitle));
+    const exclude = Array.from(new Set([...(data.exclude ?? []), ...existingTitles]));
+    const isDuplicate = (r: any) => existingNorm.has(normalizeTitle(r.title));
     let kept = await generateBatchOnce({
       apiKey,
       appliance: data.appliance,
@@ -310,7 +318,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       exclude,
       hint: data.hint,
     });
-    kept = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0);
+    kept = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0 && !isDuplicate(r));
     // Top up if filter removed some
     let safety = 0;
     while (kept.length < 4 && safety < 3) {
@@ -326,6 +334,8 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       for (const r of more) {
         if (kept.length >= 4) break;
         if (violatesRestrictions(r, restrictions).length > 0) continue;
+        if (isDuplicate(r)) continue;
+        if (kept.some((k) => normalizeTitle(k.title) === normalizeTitle(r.title))) continue;
         kept.push(r);
       }
       safety += 1;

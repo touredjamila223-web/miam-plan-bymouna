@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
 import { generateText } from "ai";
-import { violatesRestrictions, normalizeTitle } from "./recipes.functions";
+import { violatesRestrictions, normalizeTitle, recipeSignature, isSimilarRecipe } from "./recipes.functions";
 
 
 function extractJsonObject(text: string) {
@@ -155,7 +155,7 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
       supabase.from("dietary_preferences").select("restriction").eq("user_id", userId),
       supabase.from("appliances").select("appliance").eq("user_id", userId),
       supabase.from("profiles").select("household_size").eq("id", userId).maybeSingle(),
-      supabase.from("recipes").select("title").eq("owner_id", userId).limit(300),
+      supabase.from("recipes").select("title, protein, vegetables, ingredients").eq("owner_id", userId).limit(300),
     ]);
     const items = (fridge.data ?? []).map((f) => `${f.name}${f.qty ? ` (${f.qty})` : ""}`);
     if (!items.length) throw new Error("Ajoutez d'abord des ingredients dans votre frigo");
@@ -164,6 +164,7 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
     const servings = profile.data?.household_size ?? 4;
     const existingTitles = (existing.data ?? []).map((r) => r.title);
     const existingNorm = new Set(existingTitles.map(normalizeTitle));
+    const existingSigs = new Set((existing.data ?? []).map((r: any) => recipeSignature(r)).filter(Boolean));
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
@@ -186,9 +187,19 @@ Reponds : {"suggestions":[ 4 recettes completes ]}.`,
       schema: suggestionsSchema,
       maxOutputTokens: 9000,
     });
-    return object.suggestions.filter(
-      (s) => violatesRestrictions(s, restrictions).length === 0 && !existingNorm.has(normalizeTitle(s.title)),
+    const filtered = object.suggestions.filter(
+      (s) =>
+        violatesRestrictions(s, restrictions).length === 0 &&
+        !existingNorm.has(normalizeTitle(s.title)) &&
+        !existingSigs.has(recipeSignature(s)),
     );
+    // Dédoublonne aussi les variantes proches au sein du lot
+    const unique: typeof filtered = [];
+    for (const r of filtered) {
+      if (unique.some((k) => isSimilarRecipe(k, r))) continue;
+      unique.push(r);
+    }
+    return unique;
   });
 
 // ============== MEAL PLAN ==============

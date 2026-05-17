@@ -180,6 +180,20 @@ function FrigoPage() {
                         <span className="bg-secondary/60 px-1.5 py-0.5 rounded-full capitalize">{s.cuisine_style}</span>
                         <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3"/>{s.prep_time} min</span>
                         {s.calories != null && <span className="inline-flex items-center gap-1"><Flame className="w-3 h-3"/>{s.calories} kcal</span>}
+                        {typeof s.feasibility === "number" && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded-full font-semibold ${
+                              s.feasibility >= 85
+                                ? "bg-green-500/15 text-green-700 dark:text-green-400"
+                                : s.feasibility >= 60
+                                  ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                                  : "bg-destructive/15 text-destructive"
+                            }`}
+                            title="Pourcentage d'ingrédients déjà disponibles"
+                          >
+                            {s.feasibility}% faisable
+                          </span>
+                        )}
                       </div>
                       <h3 className="font-bold leading-tight">{s.title}</h3>
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{s.description}</p>

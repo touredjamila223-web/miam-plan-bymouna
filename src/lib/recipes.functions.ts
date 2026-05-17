@@ -586,6 +586,139 @@ export const listRecipeIdsForRefresh = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
+// ============== IMPORT (URL / PHOTO) ==============
+
+function stripHtml(html: string): string {
+  // Supprime scripts/styles, garde le texte lisible
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 12000);
+}
+
+export const importRecipeFromUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        url: z.string().url().max(800),
+        appliance: z.string().min(2).max(50).default("cookeo"),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("Clé Lovable AI manquante");
+
+    let html = "";
+    try {
+      const res = await fetch(data.url, {
+        headers: { "user-agent": "Mozilla/5.0 MiamPlan/1.0", accept: "text/html,*/*" },
+        redirect: "follow",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      html = await res.text();
+    } catch (e: any) {
+      throw new Error(`Impossible de récupérer la page : ${e.message}`);
+    }
+    const text = stripHtml(html);
+    if (text.length < 200) throw new Error("Le contenu de cette page est trop court ou inaccessible.");
+
+    const [profile, prefs] = await Promise.all([
+      supabase.from("profiles").select("family_name, household_size").eq("id", userId).maybeSingle(),
+      supabase.from("dietary_preferences").select("restriction").eq("user_id", userId),
+    ]);
+    const restrictions = (prefs.data ?? []).map((p) => p.restriction);
+    const servings = profile.data?.household_size ?? 4;
+
+    const gateway = createLovableAiGatewayProvider(apiKey);
+    const model = gateway("google/gemini-3-flash-preview");
+
+    return generateJson({
+      model,
+      system: `${buildSystemPrompt({ appliance: data.appliance, restrictions, servings, family_name: profile.data?.family_name ?? null })}
+
+TÂCHE SPÉCIALE — IMPORT DEPUIS UNE PAGE WEB :
+- Extrais titre, ingrédients, étapes depuis le texte fourni.
+- Convertis TOUTES les quantités en grammes/millilitres (estimation raisonnable si la recette donne "1 oignon" → "120 g d'oignon", "1 cuillère d'huile" → "10 ml").
+- ADAPTE les étapes à l'appareil ${data.appliance} en suivant strictement les règles "ÉTAPES DÉTAILLÉES" et "appliance_settings".
+- AJUSTE les quantités pour ${servings} personnes.
+- Si la page contient plusieurs recettes, prends la principale.`,
+      prompt: `URL : ${data.url}\n\nContenu :\n${text}`,
+      schema: recipeSchema,
+      maxOutputTokens: 6000,
+    });
+  });
+
+export const importRecipeFromImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        // data URL base64 : data:image/jpeg;base64,xxxx
+        image_data_url: z.string().min(50).max(7_000_000),
+        appliance: z.string().min(2).max(50).default("cookeo"),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("Clé Lovable AI manquante");
+
+    const [profile, prefs] = await Promise.all([
+      supabase.from("profiles").select("family_name, household_size").eq("id", userId).maybeSingle(),
+      supabase.from("dietary_preferences").select("restriction").eq("user_id", userId),
+    ]);
+    const restrictions = (prefs.data ?? []).map((p) => p.restriction);
+    const servings = profile.data?.household_size ?? 4;
+
+    const gateway = createLovableAiGatewayProvider(apiKey);
+    const model = gateway("google/gemini-3-flash-preview");
+
+    const { text } = await generateText({
+      model,
+      system: `${buildSystemPrompt({ appliance: data.appliance, restrictions, servings, family_name: profile.data?.family_name ?? null })}
+
+TÂCHE SPÉCIALE — IMPORT DEPUIS UNE PHOTO DE RECETTE (livre, magazine, écran) :
+- Lis le texte visible (titre, ingrédients, étapes). Fais de l'OCR si nécessaire.
+- Convertis TOUTES les quantités en grammes/millilitres (estimation raisonnable si nécessaire).
+- ADAPTE les étapes à l'appareil ${data.appliance} en suivant strictement les règles "ÉTAPES DÉTAILLÉES" et "appliance_settings".
+- AJUSTE pour ${servings} personnes.
+
+Réponds uniquement avec du JSON valide, sans Markdown.`,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: `Extrais et structure la recette visible sur cette photo, adaptée pour ${servings} personnes et l'appareil ${data.appliance}.` },
+            { type: "image", image: data.image_data_url },
+          ],
+        },
+      ],
+      temperature: 0.4,
+      maxOutputTokens: 6000,
+    });
+
+    try {
+      return recipeSchema.parse(JSON.parse(text.replace(/```json|```/gi, "").trim().replace(/^[^{]*/, "").replace(/[^}]*$/, "")));
+    } catch {
+      // fallback : extract first {...} block
+      const start = text.indexOf("{");
+      const end = text.lastIndexOf("}");
+      if (start === -1 || end === -1) throw new Error("L'IA n'a pas réussi à lire la recette. Essaie une photo plus nette.");
+      return recipeSchema.parse(JSON.parse(text.slice(start, end + 1)));
+    }
+  });
+
 export const saveRecipes = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ recipes: z.array(saveSchema).min(1).max(10) }).parse(input))

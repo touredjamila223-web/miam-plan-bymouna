@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { getRecipe } from "@/lib/recipes.functions";
 import { recordCooked } from "@/lib/cooking.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { ChevronLeft, ChevronRight, X, Play, Pause, RotateCcw, Star, Heart, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Play, Pause, RotateCcw, Star, Heart, Check, Volume2, VolumeX } from "lucide-react";
 
 export const Route = createFileRoute("/recettes/cuisine/$id")({
   head: () => ({ meta: [{ title: "Mode cuisine — MiamPlan" }] }),
@@ -41,6 +41,8 @@ function CookingMode() {
   const tickRef = useRef<number | null>(null);
   const wakeRef = useRef<any>(null);
   const [showRating, setShowRating] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
 
   const steps = ((r?.steps as any[]) ?? []);
   const step = steps[stepIdx];
@@ -55,7 +57,17 @@ function CookingMode() {
         }
       } catch {}
     })();
-    return () => { try { wakeRef.current?.release?.(); } catch {} };
+    const onVis = async () => {
+      if (document.visibilityState === "visible" && !wakeRef.current?.released) {
+        try { wakeRef.current = await (navigator as any).wakeLock?.request("screen"); } catch {}
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      try { wakeRef.current?.release?.(); } catch {}
+      try { window.speechSynthesis?.cancel(); } catch {}
+    };
   }, []);
 
   // Reset timer on step change
@@ -63,6 +75,35 @@ function CookingMode() {
     setRunning(false);
     setSecondsLeft((step?.timer_minutes ?? 0) * 60);
   }, [stepIdx, step?.timer_minutes]);
+
+  // Voice reading
+  const speakText = (text: string) => {
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth) return;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "fr-FR";
+      u.rate = 0.95;
+      u.pitch = 1;
+      const voices = synth.getVoices();
+      const fr = voices.find((v) => v.lang?.startsWith("fr"));
+      if (fr) u.voice = fr;
+      u.onstart = () => setSpeaking(true);
+      u.onend = () => setSpeaking(false);
+      u.onerror = () => setSpeaking(false);
+      synth.speak(u);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (!voiceOn || !step?.text) return;
+    const parts = [step.text];
+    if (step.appliance_settings) parts.push(`Réglages : ${step.appliance_settings}`);
+    if (step.timer_minutes) parts.push(`Minuteur : ${step.timer_minutes} minutes.`);
+    speakText(parts.join(". "));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIdx, voiceOn]);
 
   useEffect(() => {
     if (!running) return;
@@ -100,7 +141,19 @@ function CookingMode() {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <Link to="/recettes/$id" params={{ id }} className="p-2 rounded-lg hover:bg-accent/30"><X className="w-5 h-5" /></Link>
         <div className="text-sm text-muted-foreground">Étape {stepIdx + 1} / {total}</div>
-        <div className="w-9" />
+        <button
+          onClick={() => {
+            const next = !voiceOn;
+            setVoiceOn(next);
+            if (!next) { try { window.speechSynthesis?.cancel(); } catch {} setSpeaking(false); }
+            else if (step?.text) speakText(step.text);
+          }}
+          className={`p-2 rounded-lg hover:bg-accent/30 ${voiceOn ? "text-primary" : "text-muted-foreground"}`}
+          aria-label={voiceOn ? "Couper la lecture vocale" : "Activer la lecture vocale"}
+          title={voiceOn ? "Lecture vocale ON" : "Lecture vocale OFF"}
+        >
+          {voiceOn ? <Volume2 className={`w-5 h-5 ${speaking ? "animate-pulse" : ""}`} /> : <VolumeX className="w-5 h-5" />}
+        </button>
       </div>
 
       {/* Progress */}

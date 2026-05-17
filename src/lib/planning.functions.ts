@@ -133,6 +133,7 @@ const fridgeRecipeBaseSchema = z.object({
   ingredients: z.array(z.object({ name: z.string(), qty: z.string() })).min(2),
   steps: z.array(z.object({ text: z.string(), timer_minutes: z.number().int().min(0).optional() })).min(2),
   missing_ingredients: z.array(z.string()).default([]),
+  feasibility: z.number().int().min(0).max(100).optional(),
 });
 type FridgeRecipe = z.infer<typeof fridgeRecipeBaseSchema>;
 const fridgeRecipeSchema: z.ZodType<FridgeRecipe, z.ZodTypeDef, unknown> = z.preprocess(
@@ -181,6 +182,7 @@ Regles ABSOLUES :
 - Portions : ${servings}.
 - Quantites : exprime TOUJOURS les "qty" en grammes (ex "200 g") ou millilitres (ex "150 ml"). Utilise "unites" ou "pincee" seulement quand impossible a peser.
 - Indiquer les ingredients MANQUANTS a acheter (le moins possible) dans "missing_ingredients".
+- Pour CHAQUE recette, calcule un score "feasibility" (0-100) reflétant le pourcentage d'ingrédients déjà présents dans le frigo (en excluant le sel/poivre/huile/eau qu'on considère toujours dispo). Une recette 100% faisable = aucun ingrédient à acheter, 60% = il manque environ 4 ingrédients sur 10, etc. Sois honnête, ne triche pas.
 - prep_time = duree totale realiste (varier selon le type de recette).
 - Renseigner ingredients (avec qty), steps (avec timer_minutes), protein, vegetables, calories.
 Reponds : {"suggestions":[ 4 recettes completes ]}.`,
@@ -200,6 +202,8 @@ Reponds : {"suggestions":[ 4 recettes completes ]}.`,
       if (unique.some((k) => isSimilarRecipe(k, r))) continue;
       unique.push(r);
     }
+    // Tri par faisabilité décroissante : les recettes les plus réalisables avec le frigo en tête
+    unique.sort((a, b) => (b.feasibility ?? 0) - (a.feasibility ?? 0));
     return unique;
   });
 
@@ -470,3 +474,141 @@ Regles :
     });
     return object;
   });
+
+// ============== WEEK PLAN AI ==============
+
+const weekPlanSchema = z.object({
+  picks: z
+    .array(
+      z.object({
+        day: z.number().int().min(0).max(6),
+        slot: z.enum(["matin", "midi", "soir"]),
+        recipe_id: z.string(),
+      }),
+    )
+    .min(1)
+    .max(21),
+});
+
+export const generateWeekPlan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        week_start: z.string(),
+        slots: z.array(z.enum(["matin", "midi", "soir"])).default(["midi", "soir"]),
+        replace: z.boolean().default(false),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("Cle Lovable AI manquante");
+
+    const [recipesRes, prefs, profile, history] = await Promise.all([
+      supabase
+        .from("recipes")
+        .select("id, title, protein, cuisine_style, prep_time, vegetables, calories")
+        .eq("owner_id", userId)
+        .limit(200),
+      supabase.from("dietary_preferences").select("restriction").eq("user_id", userId),
+      supabase.from("profiles").select("household_size").eq("id", userId).maybeSingle(),
+      supabase
+        .from("cooked_history")
+        .select("recipe_id, taste_rating, family_loved, recipes(title)")
+        .eq("user_id", userId)
+        .order("cooked_at", { ascending: false })
+        .limit(60),
+    ]);
+    const recipes = recipesRes.data ?? [];
+    if (recipes.length < 3) throw new Error("Il te faut au moins 3 recettes en bibliothèque pour générer un planning.");
+
+    const restrictions = (prefs.data ?? []).map((p) => p.restriction);
+    const servings = profile.data?.household_size ?? 4;
+    const tasteHint = buildTasteHint(history.data ?? []);
+    const recentIds = new Set((history.data ?? []).slice(0, 8).map((h: any) => h.recipe_id));
+
+    const start = new Date(data.week_start);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    const { data: existing } = await supabase
+      .from("meal_plan")
+      .select("id, date, slot")
+      .eq("user_id", userId)
+      .gte("date", data.week_start)
+      .lt("date", end.toISOString().slice(0, 10));
+    const filledSet = new Set((existing ?? []).map((e: any) => `${e.date}|${e.slot}`));
+
+    const gateway = createLovableAiGatewayProvider(apiKey);
+    const model = gateway("google/gemini-3-flash-preview");
+
+    const recipeList = recipes
+      .map((r: any) =>
+        `${r.id} | ${r.title} | protéine: ${r.protein ?? "?"} | style: ${r.cuisine_style ?? "?"} | ${r.prep_time ?? "?"} min | légumes: ${(r.vegetables ?? []).join(", ") || "—"}`,
+      )
+      .join("\n");
+
+    const result = await generateJson<{ picks: { day: number; slot: "matin" | "midi" | "soir"; recipe_id: string }[] }>({
+      model,
+      system: `Tu remplis un planning hebdomadaire de repas pour ${servings} personnes.
+Règles ABSOLUES :
+- Ne choisis QUE parmi les recipe_id listés ci-dessous (copie l'UUID exact).
+- Respecte ABSOLUMENT ces restrictions : ${restrictions.join(", ") || "aucune"}.
+- Équilibre la semaine : varie les protéines (jamais 2 fois la même protéine 2 jours de suite), varie les styles culinaires, alterne plats rapides (<25 min) en semaine et plats plus longs le week-end (samedi=jour 5, dimanche=jour 6).
+- Évite les répétitions : une recette max 2 fois dans la semaine, jamais le même jour.
+- Évite les recettes récemment cuisinées (ids: ${[...recentIds].join(", ") || "aucune"}).
+- ${tasteHint || "Pas d'historique de goût encore."}
+- Slots à remplir : ${data.slots.join(", ")} pour les 7 jours (jour 0 = lundi, jour 6 = dimanche). Total = 7 × ${data.slots.length} créneaux.
+Réponds en JSON strict : { "picks": [ { "day": 0-6, "slot": "midi"|"soir"|"matin", "recipe_id": "<uuid>" }, ... ] }`,
+      prompt: `Recettes disponibles :\n${recipeList}\n\nGénère le planning complet.`,
+      schema: weekPlanSchema,
+      maxOutputTokens: 4000,
+    });
+
+    const validIds = new Set(recipes.map((r: any) => r.id));
+    const inserts: { user_id: string; date: string; slot: string; recipe_id: string; servings: number }[] = [];
+    const seen = new Set<string>();
+    for (const p of result.picks) {
+      if (!validIds.has(p.recipe_id)) continue;
+      if (!data.slots.includes(p.slot)) continue;
+      const d = new Date(start);
+      d.setDate(d.getDate() + p.day);
+      const dateStr = d.toISOString().slice(0, 10);
+      const key = `${dateStr}|${p.slot}`;
+      if (seen.has(key)) continue;
+      if (!data.replace && filledSet.has(key)) continue;
+      seen.add(key);
+      inserts.push({ user_id: userId, date: dateStr, slot: p.slot, recipe_id: p.recipe_id, servings });
+    }
+    if (data.replace && inserts.length) {
+      const dates = [...new Set(inserts.map((i) => i.date))];
+      const slots = [...new Set(inserts.map((i) => i.slot))];
+      await supabase
+        .from("meal_plan")
+        .delete()
+        .eq("user_id", userId)
+        .in("date", dates)
+        .in("slot", slots);
+    }
+    if (inserts.length) {
+      const { error } = await supabase.from("meal_plan").insert(inserts);
+      if (error) throw new Error(error.message);
+    }
+    return { inserted: inserts.length, total_requested: 7 * data.slots.length };
+  });
+
+// Helper imported only inside generateWeekPlan — duplicate the lightweight
+// taste hint here to keep this file independent from recipes.functions.
+function buildTasteHint(history: any[]): string {
+  if (!history.length) return "";
+  const proteinScore = new Map<string, { sum: number; n: number }>();
+  const loved: string[] = [];
+  for (const h of history) {
+    const r = h.recipes;
+    if (!r) continue;
+    if (h.family_loved && r.title) loved.push(r.title);
+  }
+  void proteinScore;
+  return loved.length ? `Coups de cœur famille à privilégier dans la semaine : ${loved.slice(0, 5).join(", ")}.` : "";
+}

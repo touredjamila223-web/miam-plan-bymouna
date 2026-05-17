@@ -465,6 +465,22 @@ export const listFavorites = createServerFn({ method: "GET" })
     return (data ?? []).map((r) => r.recipes).filter(Boolean);
   });
 
+export const getUserStats = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const [favs, cooked, prefs] = await Promise.all([
+      supabase.from("favorites").select("recipe_id", { count: "exact", head: true }).eq("user_id", userId),
+      supabase.from("cooked_history").select("id", { count: "exact", head: true }).eq("user_id", userId),
+      supabase.from("dietary_preferences").select("restriction").eq("user_id", userId),
+    ]);
+    return {
+      favorites: favs.count ?? 0,
+      cooked: cooked.count ?? 0,
+      restrictions: (prefs.data ?? []).map((p) => p.restriction),
+    };
+  });
+
 export const listCollections = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {

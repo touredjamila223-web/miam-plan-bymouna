@@ -16,6 +16,41 @@ function extractJsonObject(text: string) {
   return JSON.parse(cleaned.slice(start, end + 1));
 }
 
+const RESTRICTION_KEYWORDS: Record<string, string[]> = {
+  "sans-porc": ["porc","lard","lardon","lardons","jambon","chorizo","bacon","saucisse","saucissons","saucisson","pancetta","speck","coppa","prosciutto","andouille","boudin"],
+  "sans-fruits-de-mer": ["fruits de mer","crevette","crevettes","moule","moules","palourde","huitre","huître","crabe","langoustine","homard","calamar","encornet","seiche","poulpe","gambas","st-jacques","saint-jacques"],
+  "sans-gluten": ["farine de blé","pâtes","semoule","couscous","boulgour","seitan","orge","seigle","épeautre","epeautre"],
+  "sans-lactose": ["lait de vache","beurre","crème","fromage","yaourt","mozzarella","parmesan","ricotta","feta","mascarpone","gruyère","comté","emmental","cheddar","chantilly"],
+  "vegetarien": ["poulet","boeuf","bœuf","veau","agneau","porc","jambon","lard","saucisse","chorizo","bacon","poisson","saumon","thon","cabillaud","crevette","fruits de mer","gésier","foie","canard","dinde"],
+  "vegetalien": ["poulet","boeuf","bœuf","veau","agneau","porc","jambon","lard","saucisse","chorizo","bacon","poisson","saumon","thon","cabillaud","crevette","fruits de mer","lait","beurre","crème","fromage","yaourt","oeuf","œuf","mozzarella","miel"],
+  "sans-noix": ["noix","amande","amandes","noisette","noisettes","pistache","cajou","pécan","macadamia"],
+  "sans-alcool": ["vin","bière","rhum","whisky","cognac","porto","champagne","saké","vodka","gin","kirsch"],
+  "sans-oeuf": ["oeuf","œuf","oeufs","œufs"],
+  "halal": ["porc","lard","lardon","jambon","chorizo","bacon","saucisse","saucisson","vin","bière","rhum","alcool","kirsch","cognac"],
+};
+
+export function violatesRestrictions(recipe: any, restrictions: string[]): string[] {
+  if (!restrictions?.length) return [];
+  const text = [
+    recipe.title, recipe.description,
+    ...(recipe.ingredients ?? []).map((i: any) => `${i.name ?? ""} ${i.qty ?? ""}`),
+    ...(recipe.steps ?? []).map((s: any) => s.text ?? ""),
+    recipe.protein,
+    ...(recipe.vegetables ?? []),
+  ].join(" ").toLowerCase();
+  const found: string[] = [];
+  for (const r of restrictions) {
+    const kws = RESTRICTION_KEYWORDS[r];
+    if (!kws) continue;
+    for (const kw of kws) {
+      const escaped = kw.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+      const re = new RegExp(`(^|[^a-zàâçéèêëîïôûùüÿñæœ])${escaped}([^a-zàâçéèêëîïôûùüÿñæœ]|$)`, "i");
+      if (re.test(text)) { found.push(r); break; }
+    }
+  }
+  return found;
+}
+
 async function generateJson<T>(opts: {
   model: any;
   system: string;

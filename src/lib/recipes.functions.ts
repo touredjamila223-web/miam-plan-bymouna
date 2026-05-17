@@ -16,6 +16,39 @@ function extractJsonObject(text: string) {
   return JSON.parse(cleaned.slice(start, end + 1));
 }
 
+export function extractIngredientName(ing: any): string {
+  const direct =
+    ing?.name ?? ing?.nom ?? ing?.ingredient ?? ing?.ingrédient ?? ing?.aliment ?? ing?.produit ?? ing?.item ?? ing?.label ?? ing?.libelle ?? ing?.libellé ?? ing?.nom_ingredient ?? ing?.nomIngredient;
+  if (direct && typeof direct === "string" && direct.trim()) return direct.trim();
+  if (direct && typeof direct === "object") {
+    const inner = direct?.name ?? direct?.nom ?? direct?.text;
+    if (inner) return String(inner).trim();
+  }
+  if (ing && typeof ing === "object") {
+    for (const [k, v] of Object.entries(ing)) {
+      if (/qty|quantit|amount|dose|unit|gram|ml|kcal|calor/i.test(k)) continue;
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+  }
+  return "";
+}
+
+export function stringifySettings(value: any): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "string") return value.trim() || undefined;
+  if (Array.isArray(value)) {
+    const joined = value.map((v) => stringifySettings(v) ?? "").filter(Boolean).join(" • ");
+    return joined || undefined;
+  }
+  if (typeof value === "object") {
+    const parts = Object.entries(value)
+      .filter(([, v]) => v != null && v !== "")
+      .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`);
+    return parts.length ? parts.join(" • ") : undefined;
+  }
+  return String(value);
+}
+
 const RESTRICTION_KEYWORDS: Record<string, string[]> = {
   "sans-porc": ["porc","lard","lardon","lardons","jambon","chorizo","bacon","saucisse","saucissons","saucisson","pancetta","speck","coppa","prosciutto","andouille","boudin"],
   "sans-fruits-de-mer": ["fruits de mer","crevette","crevettes","moule","moules","palourde","huitre","huître","crabe","langoustine","homard","calamar","encornet","seiche","poulpe","gambas","st-jacques","saint-jacques"],
@@ -197,8 +230,10 @@ function normalizeRecipe(raw: unknown) {
           typeof ing === "string"
             ? { name: ing, qty: "à ajuster" }
             : {
-                name: String(ing?.name ?? ing?.nom ?? ing?.ingredient ?? ing?.ingrédient ?? "").trim(),
-                qty: String(ing?.qty ?? ing?.quantity ?? ing?.quantite ?? ing?.quantité ?? ing?.amount ?? "à ajuster").trim(),
+                name: extractIngredientName(ing),
+                qty: String(
+                  ing?.qty ?? ing?.quantity ?? ing?.quantite ?? ing?.quantité ?? ing?.amount ?? ing?.dose ?? "à ajuster",
+                ).trim(),
               },
         )
         .filter((ing: any) => ing.name)
@@ -212,8 +247,9 @@ function normalizeRecipe(raw: unknown) {
             : {
                 text: String(step?.text ?? step?.texte ?? step?.instruction ?? step?.description ?? "").trim(),
                 timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? step?.duree_minutes ?? step?.durée_minutes ?? step?.minutes ?? 0) || 0,
-                appliance_settings:
+                appliance_settings: stringifySettings(
                   step?.appliance_settings ?? step?.reglage_appareil ?? step?.réglage_appareil ?? step?.settings ?? step?.parametres,
+                ),
               },
         )
         .filter((step: any) => step.text)

@@ -197,8 +197,10 @@ function normalizeRecipe(raw: unknown) {
           typeof ing === "string"
             ? { name: ing, qty: "à ajuster" }
             : {
-                name: String(ing?.name ?? ing?.nom ?? ing?.ingredient ?? ing?.ingrédient ?? "").trim(),
-                qty: String(ing?.qty ?? ing?.quantity ?? ing?.quantite ?? ing?.quantité ?? ing?.amount ?? "à ajuster").trim(),
+                name: extractIngredientName(ing),
+                qty: String(
+                  ing?.qty ?? ing?.quantity ?? ing?.quantite ?? ing?.quantité ?? ing?.amount ?? ing?.dose ?? "à ajuster",
+                ).trim(),
               },
         )
         .filter((ing: any) => ing.name)
@@ -212,8 +214,9 @@ function normalizeRecipe(raw: unknown) {
             : {
                 text: String(step?.text ?? step?.texte ?? step?.instruction ?? step?.description ?? "").trim(),
                 timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? step?.duree_minutes ?? step?.durée_minutes ?? step?.minutes ?? 0) || 0,
-                appliance_settings:
+                appliance_settings: stringifySettings(
                   step?.appliance_settings ?? step?.reglage_appareil ?? step?.réglage_appareil ?? step?.settings ?? step?.parametres,
+                ),
               },
         )
         .filter((step: any) => step.text)

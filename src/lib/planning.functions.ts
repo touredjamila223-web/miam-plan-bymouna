@@ -405,6 +405,20 @@ const categoryMap: Record<string, string> = {
   boissons: "Boissons",
 };
 
+function normalizeCategory(value: unknown) {
+  const raw = String(value ?? "").toLowerCase().trim();
+  const compact = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (categoryMap[raw] || categoryMap[compact]) return categoryMap[raw] ?? categoryMap[compact];
+  if (compact.includes("fruit") || compact.includes("legume") || compact.includes("primeur")) return "Fruits & legumes";
+  if (compact.includes("viande") || compact.includes("poisson") || compact.includes("boucher")) return "Viandes & poissons";
+  if (compact.includes("cremer") || compact.includes("lait") || compact.includes("fromage") || compact.includes("frais")) return "Cremerie";
+  if (compact.includes("epicer")) return "Epicerie";
+  if (compact.includes("boulanger") || compact.includes("pain")) return "Boulangerie";
+  if (compact.includes("surgele")) return "Surgeles";
+  if (compact.includes("boisson")) return "Boissons";
+  return "Autres";
+}
+
 const shoppingGenBaseSchema = z.object({
   items: z
     .array(
@@ -412,7 +426,7 @@ const shoppingGenBaseSchema = z.object({
         item: z.string().min(1),
         qty: z.string().default(""),
         category: z.preprocess(
-          (value) => categoryMap[String(value ?? "").toLowerCase().trim()] ?? value ?? "Autres",
+          normalizeCategory,
           z.enum(["Fruits & legumes", "Viandes & poissons", "Cremerie", "Epicerie", "Boulangerie", "Surgeles", "Boissons", "Autres"]).default("Autres"),
         ),
       }),

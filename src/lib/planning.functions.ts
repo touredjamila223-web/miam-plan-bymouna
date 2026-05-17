@@ -237,21 +237,25 @@ Reponds : {"suggestions":[ 3 recettes completes ]}.`,
       schema: suggestionsSchema,
       maxOutputTokens: 6500,
     });
-    const filtered = object.suggestions.filter(
-      (s) =>
-        violatesRestrictions(s, restrictions).length === 0 &&
-        !existingNorm.has(normalizeTitle(s.title)) &&
-        !existingSigs.has(recipeSignature(s)),
+    // 1) On retire d'abord uniquement les recettes qui violent les restrictions alimentaires.
+    const safe = object.suggestions.filter(
+      (s) => violatesRestrictions(s, restrictions).length === 0,
     );
-    // Dédoublonne aussi les variantes proches au sein du lot
-    const unique: typeof filtered = [];
-    for (const r of filtered) {
+    // 2) On essaie d'écarter les doublons exacts par rapport à la bibliothèque.
+    const novel = safe.filter(
+      (s) => !existingNorm.has(normalizeTitle(s.title)) && !existingSigs.has(recipeSignature(s)),
+    );
+    // 3) Dédoublonnage intra-lot (variantes très proches).
+    const dedupSource = novel.length ? novel : safe;
+    const unique: typeof dedupSource = [];
+    for (const r of dedupSource) {
       if (unique.some((k) => isSimilarRecipe(k, r))) continue;
       unique.push(r);
     }
-    // Tri par faisabilité décroissante : les recettes les plus réalisables avec le frigo en tête
-    unique.sort((a, b) => (b.feasibility ?? 0) - (a.feasibility ?? 0));
-    return unique;
+    // 4) Fallback ultime : si tout a été filtré, on renvoie au moins les recettes sûres.
+    const result = unique.length ? unique : safe;
+    result.sort((a, b) => (b.feasibility ?? 0) - (a.feasibility ?? 0));
+    return result;
   });
 
 // ============== MEAL PLAN ==============

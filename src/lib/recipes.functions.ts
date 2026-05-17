@@ -328,6 +328,13 @@ function buildSystemPrompt(ctx: {
   }.
 Règles ABSOLUES :
 - La recette DOIT avoir une identité culinaire claire (français, italien, oriental, asiatique, méditerranéen, tex-mex, libanais, indien, japonais...). Tous les ingrédients, épices, sauces et accompagnements doivent appartenir à ce style. Aucune association incohérente.
+- Avant d'écrire la recette, choisis mentalement un "territoire culinaire" précis et respecte son ADN :
+  * tajine marocain = ras el hanout/cumin/coriandre, citron confit ou olives ou fruits secs, légumes fondants, sauce courte parfumée ; jamais sauce soja, curry japonais ou cheddar.
+  * wok asiatique = sauce soja/gingembre/ail/sésame/citron vert, légumes croquants, cuisson très vive ; jamais crème, herbes de Provence ou fromage.
+  * gratin français = crème ou béchamel ou fromage, ail/muscade/thym, légumes adaptés ; jamais mélange tex-mex/asiatique.
+  * méditerranéen = huile d'olive, citron, herbes, tomate/courgette/aubergine/poivron, olives/feta possible.
+  * tex-mex = cumin/paprika fumé, tomate, haricots/maïs, citron vert, coriandre, tortilla ou riz.
+- Si l'utilisateur demande un plat précis (tajine, wok, gratin, curry, risotto...), respecte les codes de CE plat. Ne transforme pas en assemblage générique.
 - Les légumes doivent s'accorder naturellement avec la protéine et le style.
 - La recette doit donner envie et être savoureuse, pas une simple liste d'ingrédients.
 - Renseigne "protein" avec la protéine principale en un seul mot simple (poulet, boeuf, agneau, porc, poisson, fruits de mer, oeufs, tofu, légumineuses, fromage, végétarien).
@@ -351,6 +358,8 @@ Règles ABSOLUES :
   * Plancha : température (180–250 °C) + durée par face.
   N'écris JAMAIS "cuire à feu moyen" sans préciser l'intensité chiffrée ou la température. N'invente JAMAIS de programme inexistant (ex : "Dorer" sur Cookeo Smart Wifi = utilise "Rissolage").
 - ÉTAPES DÉTAILLÉES : produis 6 à 10 étapes, chacune en 1–3 phrases. Décris le geste (couper en cubes de 2 cm, émincer finement, mélanger jusqu'à liaison…), l'indice visuel/sonore de réussite (jusqu'à coloration dorée, jusqu'à ce que l'oignon devienne translucide, jusqu'au sifflement…), et toute astuce utile (déglacer, gratter les sucs, racler les bords de la cuve…). Évite les étapes vagues type "faire cuire" sans contexte.
+- La liste d'ingrédients doit contenir la protéine/légumineuse principale, 2 à 4 légumes cohérents, la base aromatique, les épices/herbes du style, le liquide ou la sauce, l'accompagnement si nécessaire. Minimum 7 ingrédients utiles hors sel/poivre/eau.
+- La description doit expliquer le goût du plat (sauce, parfum, texture) et pas seulement répéter le titre.
 - Étapes claires, numérotées implicitement, avec timer en minutes quand il y a une cuisson minutée.
 - Tout doit être en français.
 - FORMAT DE SORTIE STRICT : un seul objet JSON avec EXACTEMENT ces clés racines en anglais : title, description, cuisine_style, difficulty, prep_time, servings, appliance, protein, vegetables, calories, ingredients, steps, missing_ingredients. Dans ingredients, chaque entrée = {"name":"...","qty":"..."}. Dans steps, chaque entrée = {"text":"...","timer_minutes":0,"appliance_settings":"..."}. N'utilise jamais les clés françaises "titre", "ingrédients", "étapes", "quantité".`;

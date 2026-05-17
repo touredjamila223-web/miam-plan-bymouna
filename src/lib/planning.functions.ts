@@ -477,22 +477,56 @@ export const generateShoppingFromPlan = createServerFn({ method: "POST" })
 
 // ============== BATCH COOKING ==============
 
-const batchSchema = z.object({
+function normalizeBatchOutput(raw: unknown) {
+  if (!raw || typeof raw !== "object") return raw;
+  const data = raw as Record<string, any>;
+  const mealsSource = data.meals ?? data.repas_de_la_semaine ?? data.repas ?? [];
+  const basesSource = data.bases ?? data.preparations_de_base ?? data.préparations_de_base ?? data.preparations ?? [];
+  const stepsSource = data.parallel_steps ?? data.etapes_paralleles ?? data["étapes_parallèles"] ?? data.planning ?? data.deroule ?? [];
+  return {
+    title: String(data.title ?? data.titre ?? "Session batch cooking de la semaine"),
+    total_time: Math.max(60, Math.round(Number(data.total_time ?? data.temps_total ?? data.duree_totale ?? data.durée_totale ?? 150)) || 150),
+    bases: Array.isArray(basesSource)
+      ? basesSource.map((b: any) => ({
+          name: String(b?.name ?? b?.nom ?? b?.title ?? b?.titre ?? "Base préparée"),
+          qty: String(b?.qty ?? b?.quantity ?? b?.quantite ?? b?.quantité ?? "à ajuster"),
+          use_in: Array.isArray(b?.use_in ?? b?.utilise_dans ?? b?.utilisé_dans)
+            ? (b.use_in ?? b.utilise_dans ?? b.utilisé_dans).map(String)
+            : [],
+        }))
+      : [],
+    parallel_steps: Array.isArray(stepsSource)
+      ? stepsSource.map((s: any, index: number) => ({
+          time_block: String(s?.time_block ?? s?.creneau ?? s?.créneau ?? s?.bloc_temps ?? `${index * 30}-${index * 30 + 30} min`),
+          tasks: Array.isArray(s?.tasks ?? s?.taches ?? s?.tâches)
+            ? (s.tasks ?? s.taches ?? s.tâches).map(String)
+            : [String(s?.task ?? s?.description ?? s?.texte ?? "Préparation batch")],
+        }))
+      : [],
+    meals: Array.isArray(mealsSource)
+      ? mealsSource.map((m: any) => ({
+          title: String(m?.title ?? m?.nom_repas ?? m?.name ?? m?.nom ?? "Repas préparé"),
+          day: String(m?.day ?? m?.jour ?? "Semaine"),
+          slot: String(m?.slot ?? m?.moment ?? "soir").toLowerCase().includes("midi") ? "midi" : "soir",
+          finish_steps: Array.isArray(m?.finish_steps ?? m?.etapes_finition ?? m?.étapes_finition)
+            ? (m.finish_steps ?? m.etapes_finition ?? m.étapes_finition).map(String)
+            : [String(m?.finition_rapide ?? m?.finish ?? "Réchauffer et assembler les bases préparées.")],
+        }))
+      : [],
+  };
+}
+
+const batchBaseSchema = z.object({
   title: z.string(),
-  total_time: z.number().int(),
-  bases: z.array(z.object({ name: z.string(), qty: z.string(), use_in: z.array(z.string()) })),
-  parallel_steps: z.array(
-    z.object({ time_block: z.string(), tasks: z.array(z.string()) }),
-  ),
-  meals: z.array(
-    z.object({
-      title: z.string(),
-      day: z.string(),
-      slot: z.enum(["midi", "soir"]),
-      finish_steps: z.array(z.string()),
-    }),
-  ),
+  total_time: z.number().int().min(60).max(240),
+  bases: z.array(z.object({ name: z.string().min(1), qty: z.string(), use_in: z.array(z.string()) })).min(1),
+  parallel_steps: z.array(z.object({ time_block: z.string(), tasks: z.array(z.string()).min(1) })).min(1),
+  meals: z.array(z.object({ title: z.string().min(1), day: z.string(), slot: z.enum(["midi", "soir"]), finish_steps: z.array(z.string()).min(1) })).min(3),
 });
+const batchSchema: z.ZodType<z.infer<typeof batchBaseSchema>, z.ZodTypeDef, unknown> = z.preprocess(
+  normalizeBatchOutput,
+  batchBaseSchema,
+);
 
 export const generateBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

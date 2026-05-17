@@ -415,7 +415,7 @@ export async function generateRecipeForUser(opts: {
   const servings = profile.data?.household_size ?? 4;
   const family_name = profile.data?.family_name ?? null;
   const gateway = createLovableAiGatewayProvider(apiKey);
-  const model = gateway("openai/gpt-5-nano");
+  const model = gateway("openai/gpt-5-mini");
   const recipe = await generateJson({
     model,
     system: buildSystemPrompt({ appliance: opts.appliance, restrictions, servings, family_name }),

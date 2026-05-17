@@ -11,7 +11,7 @@ import {
 } from "@/lib/planning.functions";
 import { saveRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { Refrigerator, Plus, X, Sparkles, RefreshCw, Save, Clock, Flame, Carrot } from "lucide-react";
+import { Refrigerator, Plus, X, Sparkles, RefreshCw, Save, Clock, Flame, Carrot, ChevronDown, ChevronUp } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export const Route = createFileRoute("/frigo")({
@@ -38,6 +38,7 @@ function FrigoPage() {
   const [qty, setQty] = useState("");
   const [suggestions, setSuggestions] = useState<any[] | null>(null);
   const [selected, setSelected] = useState<Record<number, boolean>>({});
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(false);
 
   const addMut = useMutation({
@@ -57,6 +58,7 @@ function FrigoPage() {
   async function runSuggest() {
     setLoading(true);
     setSelected({});
+    setExpanded({});
     setSuggestions(null);
     try {
       const s = await suggest();
@@ -156,6 +158,33 @@ function FrigoPage() {
                       )}
                       {s.missing_ingredients?.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-2"><span className="font-medium">À acheter :</span> {s.missing_ingredients.join(", ")}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); setExpanded((st) => ({ ...st, [i]: !st[i] })); }}
+                        className="mt-2 text-xs text-primary inline-flex items-center gap-1 hover:underline"
+                      >
+                        {expanded[i] ? <><ChevronUp className="w-3 h-3"/>Masquer le détail</> : <><ChevronDown className="w-3 h-3"/>Voir le détail</>}
+                      </button>
+                      {expanded[i] && (
+                        <div className="mt-2 pt-2 border-t border-border space-y-2 text-xs">
+                          <div>
+                            <p className="font-semibold mb-1">Ingrédients</p>
+                            <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                              {s.ingredients?.map((ing: any, k: number) => (
+                                <li key={k}>{ing.qty ? `${ing.qty} ` : ""}{ing.name}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="font-semibold mb-1">Étapes</p>
+                            <ol className="list-decimal list-inside space-y-0.5 text-muted-foreground">
+                              {s.steps?.map((st: any, k: number) => (
+                                <li key={k}>{st.text}{st.timer_minutes ? ` (${st.timer_minutes} min)` : ""}</li>
+                              ))}
+                            </ol>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>

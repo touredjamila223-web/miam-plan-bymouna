@@ -119,6 +119,50 @@ export function isSimilarRecipe(a: any, b: any): boolean {
   return false;
 }
 
+/**
+ * Construit un indice de goût à partir de l'historique cuisiné : protéines/styles
+ * les mieux notés et coups de cœur familial. Sert d'inspiration à l'IA.
+ */
+function buildTasteHint(history: any[]): string {
+  if (!history.length) return "";
+  const proteinScore = new Map<string, { sum: number; n: number }>();
+  const cuisineScore = new Map<string, { sum: number; n: number }>();
+  const loved: string[] = [];
+  for (const h of history) {
+    const r = h.recipes;
+    if (!r) continue;
+    const taste = Number(h.taste_rating ?? 0);
+    if (r.protein) {
+      const k = String(r.protein).toLowerCase();
+      const c = proteinScore.get(k) ?? { sum: 0, n: 0 };
+      c.sum += taste; c.n += 1; proteinScore.set(k, c);
+    }
+    if (r.cuisine_style) {
+      const k = String(r.cuisine_style).toLowerCase();
+      const c = cuisineScore.get(k) ?? { sum: 0, n: 0 };
+      c.sum += taste; c.n += 1; cuisineScore.set(k, c);
+    }
+    if (h.family_loved && r.title) loved.push(r.title);
+  }
+  const topProteins = [...proteinScore.entries()]
+    .map(([k, v]) => [k, v.sum / v.n] as const)
+    .filter(([, avg]) => avg >= 4)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([k]) => k);
+  const topCuisines = [...cuisineScore.entries()]
+    .map(([k, v]) => [k, v.sum / v.n] as const)
+    .filter(([, avg]) => avg >= 4)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([k]) => k);
+  const parts: string[] = [];
+  if (topProteins.length) parts.push(`la famille adore les protéines : ${topProteins.join(", ")}`);
+  if (topCuisines.length) parts.push(`styles préférés : ${topCuisines.join(", ")}`);
+  if (loved.length) parts.push(`coups de cœur passés (s'en inspirer sans les recopier) : ${loved.slice(0, 5).join(", ")}`);
+  return parts.length ? `Goûts famille — ${parts.join(" ; ")}` : "";
+}
+
 async function generateJson<T>(opts: {
   model: any;
   system: string;
@@ -384,6 +428,18 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
     const exclude = Array.from(new Set([...(data.exclude ?? []), ...existingTitles]));
     const isDuplicate = (r: any) =>
       existingNorm.has(normalizeTitle(r.title)) || existingSigs.has(recipeSignature(r));
+
+    // Inspiration : on récupère les recettes les mieux notées par la famille
+    // pour guider l'IA vers leurs goûts (sans copier les titres existants).
+    const { data: cooked } = await supabase
+      .from("cooked_history")
+      .select("taste_rating, family_loved, recipes(title, protein, cuisine_style)")
+      .eq("user_id", userId)
+      .order("cooked_at", { ascending: false })
+      .limit(40);
+    const tasteHint = buildTasteHint(cooked ?? []);
+    const combinedHint = [data.hint, tasteHint].filter(Boolean).join(" — ");
+
     let kept = await generateBatchOnce({
       apiKey,
       appliance: data.appliance,
@@ -391,7 +447,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       servings,
       family_name,
       exclude,
-      hint: data.hint,
+      hint: combinedHint || undefined,
     });
     kept = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0 && !isDuplicate(r));
     // Top up if filter removed some
@@ -404,7 +460,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
         servings,
         family_name,
         exclude: [...exclude, ...kept.map((r) => r.title)],
-        hint: data.hint,
+        hint: combinedHint || undefined,
       });
       for (const r of more) {
         if (kept.length >= 4) break;
@@ -491,7 +547,15 @@ export const listRecipes = createServerFn({ method: "GET" })
 export const listMyRecipes = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (input: { search?: string; protein?: string; cuisine?: string; maxTime?: number } | undefined) =>
+    (input:
+      | {
+          search?: string;
+          protein?: string;
+          cuisine?: string;
+          maxTime?: number;
+          sort?: "recent" | "rated" | "loved" | "todo";
+        }
+      | undefined) =>
       input ?? {},
   )
   .handler(async ({ data, context }) => {
@@ -502,15 +566,101 @@ export const listMyRecipes = createServerFn({ method: "GET" })
         "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories",
       )
       .eq("owner_id", userId)
-      .order("created_at", { ascending: false })
       .limit(120);
-    if (data?.search) query = query.ilike("title", `%${data.search}%`);
+    if (data?.search) {
+      const q = `%${data.search}%`;
+      // recherche full-text simple sur les champs texte
+      query = query.or(
+        `title.ilike.${q},description.ilike.${q},protein.ilike.${q},cuisine_style.ilike.${q}`,
+      );
+    }
     if (data?.protein) query = query.eq("protein", data.protein);
     if (data?.cuisine) query = query.eq("cuisine_style", data.cuisine);
     if (data?.maxTime) query = query.lte("prep_time", data.maxTime);
-    const { data: rows, error } = await query;
+    const { data: rows, error } = await query.order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
-    return rows ?? [];
+    let recipes = rows ?? [];
+    // Recherche élargie (ingrédients + légumes) — fait via une 2e requête pour les recettes
+    // dont le texte ne matchait pas le titre/description.
+    if (data?.search) {
+      const term = data.search.toLowerCase();
+      const { data: extra } = await supabase
+        .from("recipes")
+        .select(
+          "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories, ingredients",
+        )
+        .eq("owner_id", userId)
+        .limit(120);
+      const matchExtra = (extra ?? []).filter((r: any) => {
+        const vegHit = (r.vegetables ?? []).some((v: string) => v?.toLowerCase().includes(term));
+        const ingHit = Array.isArray(r.ingredients)
+          ? r.ingredients.some((i: any) => (i?.name ?? "").toLowerCase().includes(term))
+          : false;
+        return vegHit || ingHit;
+      });
+      const known = new Set(recipes.map((r) => r.id));
+      for (const r of matchExtra) {
+        if (!known.has(r.id)) {
+          const { ingredients, ...rest } = r as any;
+          recipes.push(rest);
+        }
+      }
+    }
+    if (!recipes.length) return [];
+
+    // Récupère les notes (cooked_history) pour ces recettes
+    const ids = recipes.map((r) => r.id);
+    const { data: history } = await supabase
+      .from("cooked_history")
+      .select("recipe_id, taste_rating, ease_rating, family_loved, cooked_at")
+      .eq("user_id", userId)
+      .in("recipe_id", ids);
+
+    const stats = new Map<
+      string,
+      { taste: number; ease: number; cooked: number; loved: boolean; lastCookedAt: string | null }
+    >();
+    for (const h of history ?? []) {
+      const s = stats.get(h.recipe_id) ?? { taste: 0, ease: 0, cooked: 0, loved: false, lastCookedAt: null };
+      s.taste += Number(h.taste_rating ?? 0);
+      s.ease += Number(h.ease_rating ?? 0);
+      s.cooked += 1;
+      s.loved = s.loved || !!h.family_loved;
+      if (!s.lastCookedAt || (h.cooked_at && h.cooked_at > s.lastCookedAt)) {
+        s.lastCookedAt = h.cooked_at ?? null;
+      }
+      stats.set(h.recipe_id, s);
+    }
+
+    const enriched = recipes.map((r) => {
+      const s = stats.get(r.id);
+      const cooked = s?.cooked ?? 0;
+      return {
+        ...r,
+        cooked_count: cooked,
+        avg_taste: s && cooked ? Math.round((s.taste / cooked) * 10) / 10 : null,
+        avg_ease: s && cooked ? Math.round((s.ease / cooked) * 10) / 10 : null,
+        family_loved: s?.loved ?? false,
+        last_cooked_at: s?.lastCookedAt ?? null,
+      };
+    });
+
+    const sort = data?.sort ?? "recent";
+    if (sort === "rated") {
+      enriched.sort((a, b) => (b.avg_taste ?? -1) - (a.avg_taste ?? -1));
+    } else if (sort === "loved") {
+      enriched.sort((a, b) => Number(b.family_loved) - Number(a.family_loved) || (b.avg_taste ?? -1) - (a.avg_taste ?? -1));
+    } else if (sort === "todo") {
+      // jamais cuisinées d'abord, sinon les plus anciennement cuisinées
+      enriched.sort((a, b) => {
+        if (a.cooked_count === 0 && b.cooked_count > 0) return -1;
+        if (b.cooked_count === 0 && a.cooked_count > 0) return 1;
+        const al = a.last_cooked_at ?? "";
+        const bl = b.last_cooked_at ?? "";
+        return al.localeCompare(bl);
+      });
+    }
+    return enriched;
   });
 
 export const getRecipe = createServerFn({ method: "GET" })

@@ -4,10 +4,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { getRecipe, toggleFavorite } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot, Minus, Plus } from "lucide-react";
+import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot, Minus, Plus, Download, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { scaleQty, caloriesPerServing, caloriesTotal } from "@/lib/scale";
+import { generateRecipePdf } from "@/lib/recipe-pdf";
 
 export const Route = createFileRoute("/recettes/$id")({
   component: RecipeDetail,
@@ -96,6 +97,37 @@ function RecipeView({
         <Link to="/recettes/cuisine/$id" params={{ id }} className="bg-primary text-primary-foreground px-5 py-2.5 rounded-full font-medium inline-flex items-center gap-2 hover:opacity-90">
           <Play className="w-4 h-4"/> Mode cuisine
         </Link>
+        <Button
+          variant="outline"
+          onClick={() => {
+            try {
+              generateRecipePdf({ ...r, ingredients, steps }, servings);
+              toast.success("PDF téléchargé");
+            } catch (e: any) {
+              toast.error(e?.message ?? "Erreur PDF");
+            }
+          }}
+        >
+          <Download className="w-4 h-4"/> PDF
+        </Button>
+        <Button
+          variant="outline"
+          onClick={async () => {
+            const url = typeof window !== "undefined" ? window.location.href : "";
+            const text = `${r.title} — ${r.prep_time ?? "?"} min · ${servings} pers.`;
+            const nav = navigator as any;
+            if (nav?.share) {
+              try {
+                await nav.share({ title: r.title, text, url });
+              } catch {}
+            } else if (nav?.clipboard?.writeText) {
+              await nav.clipboard.writeText(url);
+              toast.success("Lien copié");
+            }
+          }}
+        >
+          <Share2 className="w-4 h-4"/> Partager
+        </Button>
         {showFav && (
           <Button variant="outline" onClick={onToggleFavorite} disabled={favPending}>
             <Heart className="w-4 h-4"/> Favori

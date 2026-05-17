@@ -218,57 +218,86 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
     const existingSigs = new Set((existing.data ?? []).map((r: any) => recipeSignature(r)).filter(Boolean));
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
-    const systemPrompt = `Tu es un chef qui propose 3 recettes COMPLETES, COHERENTES et VARIEES realisables avec le frigo de la famille.
-Regles ABSOLUES :
-- Identite culinaire claire et DIFFERENTE pour chaque recette (francais, italien, oriental, asiatique, mediterraneen, tex-mex, indien, libanais...). Une recette doit sentir son pays/style : tajine marocain = cumin/ras el hanout/citron confit/olives ou fruits secs ; wok asiatique = soja/gingembre/ail/sesame/legumes croquants ; gratin francais = creme/bechamel/fromage/muscade/thym ; tex-mex = cumin/paprika fume/mais/haricots/citron vert.
-- Accords logiques proteine + legumes + sauce + accompagnement. Rien de bancal, pas de melange de styles incoherent.
-- Pas plus de 2 recettes avec la meme proteine principale.
-- Respecter ABSOLUMENT les exclusions : ${restrictions.join(", ") || "aucune"}.
-- NE PROPOSE JAMAIS ces titres deja presents dans la bibliotheque de l'utilisateur : ${existingTitles.join(" | ") || "aucun"}. Invente des recettes differentes.
-- Appareils disponibles : ${appliances}. Pour CHAQUE etape, "appliance_settings" doit contenir le mode ET l'intensite precise (programme, temperature en °C, vitesse, position grille, chiffre du feu 1-9, duree). N'ecris jamais "feu moyen" sans chiffre, ni "cuire" sans temperature.
-- Portions : ${servings}.
-- Quantites : exprime TOUJOURS les "qty" en grammes (ex "200 g") ou millilitres (ex "150 ml"). Utilise "unites" ou "pincee" seulement quand impossible a peser.
-- Indiquer les ingredients MANQUANTS a acheter (le moins possible) dans "missing_ingredients".
-- Pour CHAQUE recette, calcule un score "feasibility" (0-100) reflétant le pourcentage d'ingrédients déjà présents dans le frigo (en excluant le sel/poivre/huile/eau qu'on considère toujours dispo). Une recette 100% faisable = aucun ingrédient à acheter, 60% = il manque environ 4 ingrédients sur 10, etc. Sois honnête, ne triche pas.
-- prep_time = duree totale realiste (varier selon le type de recette).
-- Renseigner ingredients (avec qty), steps (5 a 7 etapes avec timer_minutes et appliance_settings), protein, vegetables, calories.
-Reponds : {"suggestions":[ 3 recettes completes ]}.`;
+    const model = gateway("google/gemini-3-flash-preview");
 
-    const accumulated: FridgeRecipe[] = [];
-    const maxAttempts = 3;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const variation = attempt === 0
-        ? ""
-        : ` Tentative ${attempt + 1} : propose 3 recettes RADICALEMENT differentes des essais precedents (autres cuisines, autres techniques, autres proteines).`;
-      let object: { suggestions: FridgeRecipe[] };
+    const cuisinePalette = [
+      "française (bistrot, gratin, mijoté, sauce crème/vin/herbes)",
+      "italienne (pâtes, risotto, sauce tomate/basilic/parmesan)",
+      "asiatique (wok soja-gingembre-ail-sésame, légumes croquants)",
+      "orientale/marocaine (tajine, cumin, ras el hanout, citron confit, olives)",
+      "indienne (curry, garam masala, lait de coco, coriandre)",
+      "tex-mex (cumin, paprika fumé, haricots, maïs, citron vert)",
+      "méditerranéenne (huile d'olive, citron, herbes, féta, olives)",
+      "libanaise (sumac, tahini, persil, citron, grenade)",
+    ];
+
+    function buildSystem(cuisine: string, variation: string) {
+      return `Tu es un chef qui propose UNE recette COMPLETE, COHERENTE et SAVOUREUSE realisable avec le frigo de la famille.
+Regles ABSOLUES :
+- Identite culinaire CLAIRE : cuisine ${cuisine}. La recette doit sentir son pays : épices, sauce, technique, accompagnement cohérents avec ce style.
+- Accords logiques proteine + legumes + sauce + accompagnement. Rien de bancal.
+- Respecter ABSOLUMENT les exclusions : ${restrictions.join(", ") || "aucune"}.
+- Eviter ces titres deja presents dans la bibliotheque : ${existingTitles.slice(0, 30).join(" | ") || "aucun"}.
+- Appareils disponibles : ${appliances}. Pour CHAQUE etape, "appliance_settings" doit contenir le mode ET l'intensite precise (temperature °C, feu 1-9, duree).
+- Portions : ${servings}.
+- Quantites en grammes ("200 g") ou millilitres ("150 ml") quand possible.
+- "missing_ingredients" = ce qu'il manque à acheter (le moins possible).
+- "feasibility" (0-100) = pourcentage d'ingrédients déjà au frigo (sel/poivre/huile/eau = toujours dispo).
+- 5 à 7 etapes avec timer_minutes et appliance_settings, ingredients avec qty, protein, vegetables, calories, prep_time.
+${variation}
+Reponds : {"recipe": { ... une recette complete ... }}.`;
+    }
+
+    // Pick 3 distinct cuisines (shuffled) and generate in parallel for speed
+    const shuffled = [...cuisinePalette].sort(() => Math.random() - 0.5);
+    const picks = shuffled.slice(0, 3);
+
+    async function genOne(cuisine: string, variation = "") {
       try {
-        object = await generateJson<{ suggestions: FridgeRecipe[] }>({
+        const { recipe } = await generateJson<{ recipe: FridgeRecipe }>({
           model,
-          system: systemPrompt,
-          prompt: `Frigo : ${items.join(", ")}. Genere 3 recettes completes, rapides a lire mais dignes d'un bon livre de cuisine.${variation}`,
-          schema: suggestionsSchema,
-          maxOutputTokens: 6500,
+          system: buildSystem(cuisine, variation),
+          prompt: `Frigo : ${items.join(", ")}. Genere UNE recette ${cuisine} complete, savoureuse et coherente.`,
+          schema: singleSuggestionSchema,
+          maxOutputTokens: 2500,
         });
-      } catch (err) {
-        if (attempt === maxAttempts - 1 && accumulated.length === 0) throw err;
-        continue;
+        return recipe;
+      } catch (e) {
+        console.error("Fridge recipe generation failed", { cuisine, error: (e as Error).message });
+        return null;
       }
-      const safe = object.suggestions.filter(
-        (s) => violatesRestrictions(s, restrictions).length === 0,
+    }
+
+    const results = await Promise.all(picks.map((c) => genOne(c)));
+    let accumulated: FridgeRecipe[] = results.filter((r): r is FridgeRecipe => !!r)
+      .filter((s) => violatesRestrictions(s, restrictions).length === 0);
+
+    // Dedup against library when possible, but never drop everything
+    const novel = accumulated.filter(
+      (s) => !existingNorm.has(normalizeTitle(s.title)) && !existingSigs.has(recipeSignature(s)),
+    );
+    if (novel.length >= 1) accumulated = novel;
+
+    // Retry the missing slots once if we have fewer than 3
+    if (accumulated.length < 3) {
+      const remaining = shuffled.slice(3, 3 + (3 - accumulated.length));
+      const retry = await Promise.all(
+        remaining.map((c) => genOne(c, "Propose une recette RADICALEMENT differente des classiques."))
       );
-      const novel = safe.filter(
-        (s) => !existingNorm.has(normalizeTitle(s.title)) && !existingSigs.has(recipeSignature(s)),
-      );
-      const dedupSource = novel.length ? novel : safe;
-      for (const r of dedupSource) {
+      for (const r of retry) {
+        if (!r) continue;
+        if (violatesRestrictions(r, restrictions).length > 0) continue;
         if (accumulated.some((k) => isSimilarRecipe(k, r))) continue;
         accumulated.push(r);
       }
-      if (accumulated.length >= 3) break;
     }
+
+    if (accumulated.length === 0) {
+      throw new Error("L'IA n'a pas réussi à générer une recette. Réessaie dans un instant.");
+    }
+
     accumulated.sort((a, b) => (b.feasibility ?? 0) - (a.feasibility ?? 0));
-    return accumulated.slice(0, Math.max(3, accumulated.length));
+    return accumulated;
   });
 
 // ============== MEAL PLAN ==============

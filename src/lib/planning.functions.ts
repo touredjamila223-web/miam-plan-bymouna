@@ -78,21 +78,22 @@ export const removeFridgeItem = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const suggestionsSchema = z.object({
-  suggestions: z
-    .array(
-      z.object({
-        title: z.string(),
-        cuisine_style: z.string(),
-        description: z.string(),
-        missing_ingredients: z.array(z.string()),
-        prep_time: z.number().int().min(5).max(180),
-        appliance: z.string(),
-      }),
-    )
-    .min(1)
-    .max(5),
+const fridgeRecipeSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  cuisine_style: z.string(),
+  difficulty: z.enum(["facile", "moyen", "difficile"]).default("facile"),
+  prep_time: z.number().int().min(5).max(240),
+  servings: z.number().int().min(1).max(20),
+  appliance: z.string(),
+  protein: z.string(),
+  vegetables: z.array(z.string()),
+  calories: z.number().int().min(50).max(2000),
+  ingredients: z.array(z.object({ name: z.string(), qty: z.string() })).min(2),
+  steps: z.array(z.object({ text: z.string(), timer_minutes: z.number().int().min(0).optional() })).min(2),
+  missing_ingredients: z.array(z.string()).default([]),
 });
+const suggestionsSchema = z.object({ suggestions: z.array(fridgeRecipeSchema).min(1).max(6) });
 
 export const suggestFromFridge = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -117,15 +118,21 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
     const model = gateway("google/gemini-3-flash-preview");
     const object = await generateJson({
       model,
-      system: `Tu es un chef qui propose 3 a 5 recettes COHERENTES realisables avec les ingredients du frigo de la famille.
-Regles : identite culinaire claire (francais/italien/oriental/asiatique/mediterraneen/tex-mex/indien/libanais), accords logiques entre proteine, legumes, sauce et accompagnement.
-Respecter ABSOLUMENT les exclusions : ${restrictions.join(", ") || "aucune"}.
-Appareils disponibles : ${appliances}.
-Portions : ${servings}.
-Indique pour chaque suggestion les ingredients MANQUANTS a acheter (peu si possible).
-Format attendu : {"suggestions":[{"title":"...","cuisine_style":"...","description":"...","missing_ingredients":["..."],"prep_time":30,"appliance":"..."}]}`,
-      prompt: `Frigo : ${items.join(", ")}.`,
+      system: `Tu es un chef qui propose 4 recettes COMPLETES, COHERENTES et VARIEES realisables avec le frigo de la famille.
+Regles ABSOLUES :
+- Identite culinaire claire et DIFFERENTE pour chaque recette (francais, italien, oriental, asiatique, mediterraneen, tex-mex, indien, libanais...).
+- Accords logiques proteine + legumes + sauce + accompagnement.
+- Pas plus de 2 recettes avec la meme proteine principale.
+- Respecter ABSOLUMENT les exclusions : ${restrictions.join(", ") || "aucune"}.
+- Appareils disponibles : ${appliances}. Adapter chaque etape a l'appareil utilise (programme, temperature, duree).
+- Portions : ${servings}.
+- Indiquer les ingredients MANQUANTS a acheter (le moins possible) dans "missing_ingredients".
+- prep_time = duree totale realiste (varier selon le type de recette).
+- Renseigner ingredients (avec qty), steps (avec timer_minutes), protein, vegetables, calories.
+Reponds : {"suggestions":[ 4 recettes completes ]}.`,
+      prompt: `Frigo : ${items.join(", ")}. Genere 4 recettes completes.`,
       schema: suggestionsSchema,
+      maxOutputTokens: 9000,
     });
     return object.suggestions;
   });

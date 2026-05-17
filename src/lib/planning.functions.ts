@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
-import { generateObject, generateText } from "ai";
+import { generateText } from "ai";
 import { violatesRestrictions, normalizeTitle, recipeSignature, isSimilarRecipe } from "./recipes.functions";
 
 
@@ -23,25 +23,11 @@ async function generateJson<T>(opts: {
   schema: z.ZodType<T, z.ZodTypeDef, any>;
   maxOutputTokens?: number;
 }) {
-  try {
-    const { object } = await generateObject({
-      model: opts.model,
-      system: opts.system,
-      prompt: opts.prompt,
-      schema: opts.schema,
-      temperature: 0.4,
-      maxOutputTokens: opts.maxOutputTokens ?? 5000,
-    });
-    return object as T;
-  } catch (structuredError) {
-    console.error("Structured planning generation failed, falling back to JSON text", structuredError);
-  }
-
   const { text } = await generateText({
     model: opts.model,
-    system: `${opts.system}\n\nRéponds uniquement avec du JSON valide, sans Markdown, sans commentaire, sans texte avant ou après.`,
+    system: `${opts.system}\n\nCONTRAINTE TECHNIQUE CRITIQUE : réponds uniquement avec UN objet JSON valide. Aucun Markdown, aucune phrase avant/après, aucune virgule finale, aucune clé française.`,
     prompt: opts.prompt,
-    temperature: 0.6,
+    temperature: 0.45,
     maxOutputTokens: opts.maxOutputTokens ?? 5000,
   });
 
@@ -102,18 +88,19 @@ function splitList(value: unknown) {
 function normalizeFridgeRecipe(raw: unknown) {
   if (!raw || typeof raw !== "object") return raw;
   const r = raw as Record<string, any>;
-  const ingredients = Array.isArray(r.ingredients)
-    ? r.ingredients.map((ing: any) =>
+  const ingredientsSource = r.ingredients ?? r["ingrédients"] ?? r.liste_ingredients ?? [];
+  const ingredients = Array.isArray(ingredientsSource)
+    ? ingredientsSource.map((ing: any) =>
         typeof ing === "string"
-          ? { name: ing, qty: "" }
-          : { name: String(ing?.name ?? ing?.ingredient ?? ""), qty: String(ing?.qty ?? ing?.quantity ?? "") },
+          ? { name: ing, qty: "à ajuster" }
+          : { name: String(ing?.name ?? ing?.nom ?? ing?.ingredient ?? ""), qty: String(ing?.qty ?? ing?.quantity ?? ing?.quantite ?? ing?.quantité ?? "à ajuster") },
       )
     : [];
-  const stepsSource = Array.isArray(r.steps) ? r.steps : Array.isArray(r.instructions) ? r.instructions : [];
+  const stepsSource = Array.isArray(r.steps) ? r.steps : Array.isArray(r.instructions) ? r.instructions : Array.isArray(r.etapes) ? r.etapes : [];
   const steps = stepsSource.map((step: any) =>
     typeof step === "string"
       ? { text: step, timer_minutes: 0 }
-      : { text: String(step?.text ?? step?.instruction ?? step?.description ?? ""), timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? step?.minutes ?? 0) || 0 },
+      : { text: String(step?.text ?? step?.texte ?? step?.instruction ?? step?.description ?? ""), timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? step?.minutes ?? 0) || 0, appliance_settings: step?.appliance_settings ?? step?.reglage_appareil ?? step?.settings },
   );
 
   return {
@@ -125,7 +112,7 @@ function normalizeFridgeRecipe(raw: unknown) {
     servings: Math.max(1, Math.round(Number(r.servings ?? r.portions ?? 4)) || 4),
     appliance: String(r.appliance ?? r.device ?? "cookeo"),
     protein: String(r.protein ?? r.proteine ?? r.main_protein ?? "végétarien").toLowerCase(),
-    vegetables: splitList(r.vegetables ?? r.legumes),
+    vegetables: splitList(r.vegetables ?? r.legumes ?? r["légumes"]),
     calories: Math.max(50, Math.round(Number(r.calories ?? r.kcal ?? 500)) || 500),
     ingredients,
     steps,
@@ -144,8 +131,8 @@ const fridgeRecipeBaseSchema = z.object({
   protein: z.string(),
   vegetables: z.array(z.string()),
   calories: z.number().int().min(50).max(2000),
-  ingredients: z.array(z.object({ name: z.string(), qty: z.string() })).min(2),
-  steps: z.array(z.object({ text: z.string(), timer_minutes: z.number().int().min(0).optional() })).min(2),
+  ingredients: z.array(z.object({ name: z.string().min(1), qty: z.string().min(1) })).min(6),
+  steps: z.array(z.object({ text: z.string().min(8), timer_minutes: z.number().int().min(0).optional(), appliance_settings: z.string().optional() })).min(5),
   missing_ingredients: z.array(z.string()).default([]),
   feasibility: z.number().int().min(0).max(100).optional(),
 });
@@ -182,13 +169,13 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
     const existingSigs = new Set((existing.data ?? []).map((r: any) => recipeSignature(r)).filter(Boolean));
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
+    const model = gateway("openai/gpt-5-nano");
     const object = await generateJson<{ suggestions: FridgeRecipe[] }>({
       model,
-      system: `Tu es un chef qui propose 4 recettes COMPLETES, COHERENTES et VARIEES realisables avec le frigo de la famille.
+      system: `Tu es un chef qui propose 3 recettes COMPLETES, COHERENTES et VARIEES realisables avec le frigo de la famille.
 Regles ABSOLUES :
-- Identite culinaire claire et DIFFERENTE pour chaque recette (francais, italien, oriental, asiatique, mediterraneen, tex-mex, indien, libanais...).
-- Accords logiques proteine + legumes + sauce + accompagnement.
+- Identite culinaire claire et DIFFERENTE pour chaque recette (francais, italien, oriental, asiatique, mediterraneen, tex-mex, indien, libanais...). Une recette doit sentir son pays/style : tajine marocain = cumin/ras el hanout/citron confit/olives ou fruits secs ; wok asiatique = soja/gingembre/ail/sesame/legumes croquants ; gratin francais = creme/bechamel/fromage/muscade/thym ; tex-mex = cumin/paprika fume/mais/haricots/citron vert.
+- Accords logiques proteine + legumes + sauce + accompagnement. Rien de bancal, pas de melange de styles incoherent.
 - Pas plus de 2 recettes avec la meme proteine principale.
 - Respecter ABSOLUMENT les exclusions : ${restrictions.join(", ") || "aucune"}.
 - NE PROPOSE JAMAIS ces titres deja presents dans la bibliotheque de l'utilisateur : ${existingTitles.join(" | ") || "aucun"}. Invente des recettes differentes.
@@ -198,11 +185,11 @@ Regles ABSOLUES :
 - Indiquer les ingredients MANQUANTS a acheter (le moins possible) dans "missing_ingredients".
 - Pour CHAQUE recette, calcule un score "feasibility" (0-100) reflétant le pourcentage d'ingrédients déjà présents dans le frigo (en excluant le sel/poivre/huile/eau qu'on considère toujours dispo). Une recette 100% faisable = aucun ingrédient à acheter, 60% = il manque environ 4 ingrédients sur 10, etc. Sois honnête, ne triche pas.
 - prep_time = duree totale realiste (varier selon le type de recette).
-- Renseigner ingredients (avec qty), steps (avec timer_minutes), protein, vegetables, calories.
-Reponds : {"suggestions":[ 4 recettes completes ]}.`,
-      prompt: `Frigo : ${items.join(", ")}. Genere 4 recettes completes.`,
+- Renseigner ingredients (avec qty), steps (5 a 7 etapes avec timer_minutes et appliance_settings), protein, vegetables, calories.
+Reponds : {"suggestions":[ 3 recettes completes ]}.`,
+      prompt: `Frigo : ${items.join(", ")}. Genere 3 recettes completes, rapides a lire mais dignes d'un bon livre de cuisine.`,
       schema: suggestionsSchema,
-      maxOutputTokens: 9000,
+      maxOutputTokens: 6500,
     });
     const filtered = object.suggestions.filter(
       (s) =>
@@ -473,7 +460,7 @@ export const generateShoppingFromPlan = createServerFn({ method: "POST" })
       (fridge.data ?? []).map((f) => `${f.name}${f.qty ? ` (${f.qty})` : ""}`).join(", ") || "vide";
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
+    const model = gateway("openai/gpt-5-nano");
     const object = await generateJson({
       model,
       system: `Tu consolides une liste de courses a partir des recettes prevues. Additionne les quantites identiques, regroupe par categorie de rayon, retire ce qui est deja dans le frigo.
@@ -563,7 +550,7 @@ export const generateBatch = createServerFn({ method: "POST" })
     const servings = profile.data?.household_size ?? 4;
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
+    const model = gateway("openai/gpt-5-nano");
     const object = await generateJson({
       model,
       system: `Tu concois une session de batch cooking dominicale de 2-3h pour preparer 5 repas de semaine pour ${servings} personnes.
@@ -646,7 +633,7 @@ export const generateWeekPlan = createServerFn({ method: "POST" })
     const filledSet = new Set((existing ?? []).map((e: any) => `${e.date}|${e.slot}`));
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
+    const model = gateway("openai/gpt-5-nano");
 
     const recipeList = recipes
       .map((r: any) =>

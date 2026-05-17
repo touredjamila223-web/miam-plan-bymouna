@@ -40,9 +40,9 @@ function RecipeProposalCard({
   const isCompleteRecipe =
     !!recipe?.title &&
     Array.isArray(recipe?.ingredients) &&
-    recipe.ingredients.length >= 2 &&
+    recipe.ingredients.length >= 6 &&
     Array.isArray(recipe?.steps) &&
-    recipe.steps.length >= 2;
+    recipe.steps.length >= 5;
 
   async function persist(): Promise<string> {
     if (savedId) return savedId;

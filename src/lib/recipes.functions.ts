@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
-import { generateObject, generateText } from "ai";
+import { generateText } from "ai";
 
 
 function extractJsonObject(text: string) {
@@ -170,25 +170,11 @@ async function generateJson<T>(opts: {
   schema: z.ZodType<T, z.ZodTypeDef, any>;
   maxOutputTokens?: number;
 }): Promise<T> {
-  try {
-    const { object } = await generateObject({
-      model: opts.model,
-      system: opts.system,
-      prompt: opts.prompt,
-      schema: opts.schema,
-      temperature: 0.8,
-      maxOutputTokens: opts.maxOutputTokens ?? 6000,
-    });
-    return object as T;
-  } catch (structuredError) {
-    console.error("Structured AI generation failed, falling back to JSON text", structuredError);
-  }
-
   const { text } = await generateText({
     model: opts.model,
-    system: `${opts.system}\n\nRéponds uniquement avec du JSON valide, sans Markdown, sans commentaire, sans texte avant ou après.`,
+    system: `${opts.system}\n\nCONTRAINTE TECHNIQUE CRITIQUE : réponds uniquement avec UN objet JSON valide. Aucun Markdown, aucune phrase avant/après, aucune virgule finale, aucune clé française.`,
     prompt: opts.prompt,
-    temperature: 0.8,
+    temperature: 0.55,
     maxOutputTokens: opts.maxOutputTokens ?? 6000,
   });
 
@@ -283,9 +269,52 @@ const recipeBaseSchema = z.object({
 
 type RecipeDto = z.infer<typeof recipeBaseSchema>;
 
+const STYLE_ANCHORS: Record<string, string[]> = {
+  marocain: ["ras el hanout", "cumin", "coriandre", "citron confit", "olive", "abricot", "amande", "miel", "safran"],
+  oriental: ["cumin", "coriandre", "paprika", "cannelle", "menthe", "citron", "pois chiches", "semoule", "yaourt"],
+  asiatique: ["sauce soja", "gingembre", "ail", "sésame", "riz", "nouilles", "coriandre", "citron vert", "oignon nouveau"],
+  japonais: ["sauce soja", "mirin", "miso", "sésame", "gingembre", "riz", "nori", "dashi"],
+  indien: ["garam masala", "curry", "curcuma", "gingembre", "coriandre", "yaourt", "lait de coco", "riz basmati"],
+  italien: ["tomate", "basilic", "origan", "parmesan", "mozzarella", "huile d'olive", "pâtes", "risotto"],
+  français: ["beurre", "crème", "moutarde", "thym", "laurier", "échalote", "vin", "champignon", "pomme de terre"],
+  mediterraneen: ["huile d'olive", "citron", "origan", "thym", "tomate", "courgette", "aubergine", "feta", "olive"],
+  texmex: ["cumin", "paprika fumé", "haricots rouges", "maïs", "tomate", "avocat", "citron vert", "cheddar", "tortilla"],
+};
+
+function normalizedText(value: unknown) {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function validateRecipeQuality(recipe: RecipeDto) {
+  const ingredientsText = normalizedText(recipe.ingredients.map((i) => `${i.qty} ${i.name}`).join(" "));
+  const fullText = normalizedText([
+    recipe.title,
+    recipe.description,
+    recipe.cuisine_style,
+    ingredientsText,
+    recipe.steps.map((s) => `${s.text} ${s.appliance_settings ?? ""}`).join(" "),
+  ].join(" "));
+  if (recipe.ingredients.length < 6) throw new Error("Recette trop pauvre : ingrédients insuffisants.");
+  if (recipe.steps.length < 5) throw new Error("Recette trop pauvre : étapes insuffisantes.");
+  if (!recipe.ingredients.some((i) => /\d/.test(i.qty))) throw new Error("Recette incomplète : quantités manquantes.");
+  if (!recipe.steps.some((s) => (s.appliance_settings ?? "").trim().length > 8)) {
+    throw new Error("Recette incomplète : réglages appareil manquants.");
+  }
+  const style = normalizedText(recipe.cuisine_style).replace(/[^a-z0-9]+/g, "");
+  const anchors = Object.entries(STYLE_ANCHORS).find(([key]) => style.includes(key.replace(/[^a-z0-9]+/g, "")))?.[1];
+  if (anchors) {
+    const hits = anchors.filter((anchor) => fullText.includes(normalizedText(anchor))).length;
+    if (hits < 2) throw new Error("Recette incohérente : marqueurs culinaires insuffisants.");
+  }
+  return recipe;
+}
+
 const recipeSchema: z.ZodType<RecipeDto, z.ZodTypeDef, unknown> = z.preprocess(
   normalizeRecipe,
-  recipeBaseSchema,
+  recipeBaseSchema.transform(validateRecipeQuality),
 );
 
 function buildSystemPrompt(ctx: {
@@ -299,6 +328,13 @@ function buildSystemPrompt(ctx: {
   }.
 Règles ABSOLUES :
 - La recette DOIT avoir une identité culinaire claire (français, italien, oriental, asiatique, méditerranéen, tex-mex, libanais, indien, japonais...). Tous les ingrédients, épices, sauces et accompagnements doivent appartenir à ce style. Aucune association incohérente.
+- Avant d'écrire la recette, choisis mentalement un "territoire culinaire" précis et respecte son ADN :
+  * tajine marocain = ras el hanout/cumin/coriandre, citron confit ou olives ou fruits secs, légumes fondants, sauce courte parfumée ; jamais sauce soja, curry japonais ou cheddar.
+  * wok asiatique = sauce soja/gingembre/ail/sésame/citron vert, légumes croquants, cuisson très vive ; jamais crème, herbes de Provence ou fromage.
+  * gratin français = crème ou béchamel ou fromage, ail/muscade/thym, légumes adaptés ; jamais mélange tex-mex/asiatique.
+  * méditerranéen = huile d'olive, citron, herbes, tomate/courgette/aubergine/poivron, olives/feta possible.
+  * tex-mex = cumin/paprika fumé, tomate, haricots/maïs, citron vert, coriandre, tortilla ou riz.
+- Si l'utilisateur demande un plat précis (tajine, wok, gratin, curry, risotto...), respecte les codes de CE plat. Ne transforme pas en assemblage générique.
 - Les légumes doivent s'accorder naturellement avec la protéine et le style.
 - La recette doit donner envie et être savoureuse, pas une simple liste d'ingrédients.
 - Renseigne "protein" avec la protéine principale en un seul mot simple (poulet, boeuf, agneau, porc, poisson, fruits de mer, oeufs, tofu, légumineuses, fromage, végétarien).
@@ -322,6 +358,8 @@ Règles ABSOLUES :
   * Plancha : température (180–250 °C) + durée par face.
   N'écris JAMAIS "cuire à feu moyen" sans préciser l'intensité chiffrée ou la température. N'invente JAMAIS de programme inexistant (ex : "Dorer" sur Cookeo Smart Wifi = utilise "Rissolage").
 - ÉTAPES DÉTAILLÉES : produis 6 à 10 étapes, chacune en 1–3 phrases. Décris le geste (couper en cubes de 2 cm, émincer finement, mélanger jusqu'à liaison…), l'indice visuel/sonore de réussite (jusqu'à coloration dorée, jusqu'à ce que l'oignon devienne translucide, jusqu'au sifflement…), et toute astuce utile (déglacer, gratter les sucs, racler les bords de la cuve…). Évite les étapes vagues type "faire cuire" sans contexte.
+- La liste d'ingrédients doit contenir la protéine/légumineuse principale, 2 à 4 légumes cohérents, la base aromatique, les épices/herbes du style, le liquide ou la sauce, l'accompagnement si nécessaire. Minimum 7 ingrédients utiles hors sel/poivre/eau.
+- La description doit expliquer le goût du plat (sauce, parfum, texture) et pas seulement répéter le titre.
 - Étapes claires, numérotées implicitement, avec timer en minutes quand il y a une cuisson minutée.
 - Tout doit être en français.
 - FORMAT DE SORTIE STRICT : un seul objet JSON avec EXACTEMENT ces clés racines en anglais : title, description, cuisine_style, difficulty, prep_time, servings, appliance, protein, vegetables, calories, ingredients, steps, missing_ingredients. Dans ingredients, chaque entrée = {"name":"...","qty":"..."}. Dans steps, chaque entrée = {"text":"...","timer_minutes":0,"appliance_settings":"..."}. N'utilise jamais les clés françaises "titre", "ingrédients", "étapes", "quantité".`;
@@ -350,7 +388,7 @@ export const generateRecipe = createServerFn({ method: "POST" })
     const family_name = profile.data?.family_name;
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
+    const model = gateway("openai/gpt-5-mini");
 
     const recipe = await generateJson({
       model,
@@ -377,7 +415,7 @@ export async function generateRecipeForUser(opts: {
   const servings = profile.data?.household_size ?? 4;
   const family_name = profile.data?.family_name ?? null;
   const gateway = createLovableAiGatewayProvider(apiKey);
-  const model = gateway("google/gemini-2.5-flash");
+  const model = gateway("openai/gpt-5-mini");
   const recipe = await generateJson({
     model,
     system: buildSystemPrompt({ appliance: opts.appliance, restrictions, servings, family_name }),
@@ -396,7 +434,7 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error("Clé Lovable AI manquante");
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
+    const model = gateway("openai/gpt-5-mini");
     const recipe = await generateJson({
       model,
       system: buildSystemPrompt({
@@ -416,7 +454,7 @@ const saveSchema = recipeBaseSchema.extend({
   source: z.string().default("ai"),
 });
 
-const batchSchema = z.object({ recipes: z.array(recipeSchema).length(4) });
+const batchSchema = z.object({ recipes: z.array(recipeSchema).min(3).max(4) });
 
 const batchInput = z.object({
   appliance: z.string().min(2).max(50),
@@ -427,14 +465,14 @@ const batchInput = z.object({
 });
 
 function buildBatchPrompt(exclude: string[], hint?: string) {
-  return `Propose 4 recettes VARIÉES et savoureuses pour le repas familial.
+  return `Propose 3 recettes VARIÉES et savoureuses pour le repas familial.
 Contraintes :
-- Chaque recette doit avoir une identité culinaire claire et différente des autres autant que possible (varie les styles : ex. un français, un asiatique, un méditerranéen, un oriental).
-- PROTÉINES : pas plus de 2 recettes avec la même protéine principale parmi les 4. Varie au maximum.
+- Chaque recette doit avoir une identité culinaire claire et différente des autres autant que possible (varie les styles : ex. un français, un asiatique, un méditerranéen).
+- PROTÉINES : pas plus de 2 recettes avec la même protéine principale parmi les 3. Varie au maximum.
 - Chaque recette doit être cohérente : protéine + légumes + sauce + épices + accompagnement forment un ensemble harmonieux.
 - Évite ces titres déjà vus : ${exclude.length ? exclude.join(", ") : "aucun"}.
 ${hint ? `- Préférence utilisateur : ${hint}` : ""}
-Réponds avec un objet { recipes: [4 recettes complètes] }.`;
+Réponds avec un objet { recipes: [3 recettes complètes] }.`;
 }
 
 async function generateBatchOnce(opts: {
@@ -447,7 +485,7 @@ async function generateBatchOnce(opts: {
   hint?: string;
 }) {
   const gateway = createLovableAiGatewayProvider(opts.apiKey);
-  const model = gateway("google/gemini-2.5-flash");
+  const model = gateway("openai/gpt-5-mini");
   const object = await generateJson({
     model,
     system: buildSystemPrompt({
@@ -510,7 +548,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
     const tasteHint = buildTasteHint(cooked ?? []);
     const combinedHint = [data.hint, tasteHint].filter(Boolean).join(" — ");
 
-    let kept = await generateBatchOnce({
+    const kept = await generateBatchOnce({
       apiKey,
       appliance: data.appliance,
       restrictions,
@@ -519,35 +557,14 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       exclude,
       hint: combinedHint || undefined,
     });
-    kept = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0 && !isDuplicate(r));
-    // Top up if filter removed some
-    let safety = 0;
-    while (kept.length < 4 && safety < 3) {
-      const more = await generateBatchOnce({
-        apiKey,
-        appliance: data.appliance,
-        restrictions,
-        servings,
-        family_name,
-        exclude: [...exclude, ...kept.map((r) => r.title)],
-        hint: combinedHint || undefined,
-      });
-      for (const r of more) {
-        if (kept.length >= 4) break;
-        if (violatesRestrictions(r, restrictions).length > 0) continue;
-        if (isDuplicate(r)) continue;
-        if (kept.some((k) => isSimilarRecipe(k, r))) continue;
-        kept.push(r);
-      }
-      safety += 1;
-    }
+    const valid = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0 && !isDuplicate(r));
     // Filtre intra-lot final : enlève les variantes proches entre elles
-    const unique: typeof kept = [];
-    for (const r of kept) {
+    const unique: typeof valid = [];
+    for (const r of valid) {
       if (unique.some((k) => isSimilarRecipe(k, r))) continue;
       unique.push(r);
     }
-    return unique.slice(0, 4);
+    return unique.slice(0, 3);
   });
 
 export const deleteRecipe = createServerFn({ method: "POST" })

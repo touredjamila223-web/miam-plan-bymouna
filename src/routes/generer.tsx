@@ -108,7 +108,7 @@ function Generer() {
     <div className="space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold flex items-center gap-2"><Sparkles className="w-7 h-7 text-primary"/>Générer des recettes</h1>
-        <p className="text-muted-foreground mt-1">Choisis ton appareil, l'IA te propose 4 recettes variées et cohérentes adaptées à tes préférences.</p>
+        <p className="text-muted-foreground mt-1">Choisis ton appareil, l'IA te propose 3 recettes variées et cohérentes adaptées à tes préférences.</p>
       </div>
       <StrictDietBanner />
 
@@ -130,7 +130,7 @@ function Generer() {
         </div>
         <Button onClick={go} disabled={loading} className="w-full">
           <Sparkles className="w-4 h-4"/>
-          {loading ? "Le chef réfléchit…" : recipes.length ? "Régénérer 4 nouvelles recettes" : "Générer 4 recettes ✨"}
+          {loading ? "Le chef réfléchit…" : recipes.length ? "Régénérer 3 nouvelles recettes" : "Générer 3 recettes ✨"}
         </Button>
 
         <div className="border-t border-border pt-4">

@@ -269,9 +269,52 @@ const recipeBaseSchema = z.object({
 
 type RecipeDto = z.infer<typeof recipeBaseSchema>;
 
+const STYLE_ANCHORS: Record<string, string[]> = {
+  marocain: ["ras el hanout", "cumin", "coriandre", "citron confit", "olive", "abricot", "amande", "miel", "safran"],
+  oriental: ["cumin", "coriandre", "paprika", "cannelle", "menthe", "citron", "pois chiches", "semoule", "yaourt"],
+  asiatique: ["sauce soja", "gingembre", "ail", "sésame", "riz", "nouilles", "coriandre", "citron vert", "oignon nouveau"],
+  japonais: ["sauce soja", "mirin", "miso", "sésame", "gingembre", "riz", "nori", "dashi"],
+  indien: ["garam masala", "curry", "curcuma", "gingembre", "coriandre", "yaourt", "lait de coco", "riz basmati"],
+  italien: ["tomate", "basilic", "origan", "parmesan", "mozzarella", "huile d'olive", "pâtes", "risotto"],
+  français: ["beurre", "crème", "moutarde", "thym", "laurier", "échalote", "vin", "champignon", "pomme de terre"],
+  mediterraneen: ["huile d'olive", "citron", "origan", "thym", "tomate", "courgette", "aubergine", "feta", "olive"],
+  texmex: ["cumin", "paprika fumé", "haricots rouges", "maïs", "tomate", "avocat", "citron vert", "cheddar", "tortilla"],
+};
+
+function normalizedText(value: unknown) {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function validateRecipeQuality(recipe: RecipeDto) {
+  const ingredientsText = normalizedText(recipe.ingredients.map((i) => `${i.qty} ${i.name}`).join(" "));
+  const fullText = normalizedText([
+    recipe.title,
+    recipe.description,
+    recipe.cuisine_style,
+    ingredientsText,
+    recipe.steps.map((s) => `${s.text} ${s.appliance_settings ?? ""}`).join(" "),
+  ].join(" "));
+  if (recipe.ingredients.length < 6) throw new Error("Recette trop pauvre : ingrédients insuffisants.");
+  if (recipe.steps.length < 5) throw new Error("Recette trop pauvre : étapes insuffisantes.");
+  if (!recipe.ingredients.some((i) => /\d/.test(i.qty))) throw new Error("Recette incomplète : quantités manquantes.");
+  if (!recipe.steps.some((s) => (s.appliance_settings ?? "").trim().length > 8)) {
+    throw new Error("Recette incomplète : réglages appareil manquants.");
+  }
+  const style = normalizedText(recipe.cuisine_style).replace(/[^a-z0-9]+/g, "");
+  const anchors = Object.entries(STYLE_ANCHORS).find(([key]) => style.includes(key.replace(/[^a-z0-9]+/g, "")))?.[1];
+  if (anchors) {
+    const hits = anchors.filter((anchor) => fullText.includes(normalizedText(anchor))).length;
+    if (hits < 2) throw new Error("Recette incohérente : marqueurs culinaires insuffisants.");
+  }
+  return recipe;
+}
+
 const recipeSchema: z.ZodType<RecipeDto, z.ZodTypeDef, unknown> = z.preprocess(
   normalizeRecipe,
-  recipeBaseSchema,
+  recipeBaseSchema.transform(validateRecipeQuality),
 );
 
 function buildSystemPrompt(ctx: {

@@ -164,6 +164,12 @@ function RecipeProposalCard({
         </div>
       </details>
 
+      {!isCompleteRecipe && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          Leia n’a pas reçu une recette complète. Clique sur “Une autre” pour régénérer une vraie proposition.
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2 pt-1">
         <Button size="sm" onClick={onSave} disabled={!isCompleteRecipe || busy !== null || !!savedId}>
           {busy === "save" ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookmarkPlus className="w-4 h-4" />}
@@ -247,6 +253,13 @@ function Chat() {
               }
               if (p.type === "tool-proposeRecipe") {
                 if (p.state === "output-available") {
+                  if (p.output?.error) {
+                    return (
+                      <div key={i} className="bg-destructive/10 text-destructive rounded-2xl p-4 text-sm">
+                        {p.output.error}
+                      </div>
+                    );
+                  }
                   return (
                     <RecipeProposalCard
                       key={i}

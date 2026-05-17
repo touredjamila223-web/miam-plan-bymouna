@@ -458,7 +458,8 @@ export const generateShoppingFromPlan = createServerFn({ method: "POST" })
     const model = gateway("google/gemini-2.5-flash");
     const object = await generateJson({
       model,
-      system: `Tu consolides une liste de courses a partir des recettes prevues. Additionne les quantites identiques, regroupe par categorie de rayon, retire ce qui est deja dans le frigo.`,
+      system: `Tu consolides une liste de courses a partir des recettes prevues. Additionne les quantites identiques, regroupe par categorie de rayon, retire ce qui est deja dans le frigo.
+FORMAT STRICT : retourne uniquement {"items":[{"item":"...","qty":"...","category":"Fruits & legumes|Viandes & poissons|Cremerie|Epicerie|Boulangerie|Surgeles|Boissons|Autres"}]}. N'utilise jamais une clé "courses" ni des catégories comme objets racines.`,
       prompt: `Frigo dispo : ${fridgeStr}.\n\nRecettes prevues :\n${recipes}`,
       schema: shoppingGenSchema,
     });
@@ -552,7 +553,8 @@ Regles :
 - Cuisiner des BASES (legumes rotis, cereales, proteines, sauces) REUTILISABLES dans plusieurs repas
 - Optimiser : indiquer des etapes PARALLELES par bloc de temps en utilisant plusieurs appareils en meme temps : ${appliances}
 - Chaque repas final doit avoir une identite culinaire (francais/italien/oriental/asiatique/mediterraneen) coherente et juste 5-10 min de finition en semaine
-- Respecter ABSOLUMENT : ${restrictions.join(", ") || "aucune restriction"}`,
+- Respecter ABSOLUMENT : ${restrictions.join(", ") || "aucune restriction"}
+FORMAT STRICT : retourne uniquement {"title":"...","total_time":150,"bases":[{"name":"...","qty":"...","use_in":["..."]}],"parallel_steps":[{"time_block":"0-30 min","tasks":["..."]}],"meals":[{"title":"...","day":"Lundi","slot":"soir","finish_steps":["..."]}]}. N'utilise jamais les clés françaises "titre", "repas_de_la_semaine", "etapes_paralleles".`,
       prompt: `Genere une session batch cooking complete pour la semaine.`,
       schema: batchSchema,
       maxOutputTokens: 7000,

@@ -459,6 +459,14 @@ export const clearCheckedShopping = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const clearAllShopping = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    await supabase.from("shopping_list").delete().eq("user_id", userId);
+    return { ok: true };
+  });
+
 function normalizeShoppingOutput(raw: unknown) {
   if (!raw || typeof raw !== "object") return raw;
   const data = raw as Record<string, any>;

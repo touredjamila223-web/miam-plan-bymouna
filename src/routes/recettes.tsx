@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PROTEINS, CUISINE_STYLES, APPLIANCES } from "@/lib/constants";
 import { RecipeCompactCard } from "@/components/recipe-compact-card";
+import { RecipeCardSkeletonGrid } from "@/components/recipe-card-skeleton";
 import { Search, X, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
@@ -94,7 +95,7 @@ function Recettes() {
     maxTime: maxTime && maxTime !== "0" ? Number(maxTime) : undefined,
     sort,
   };
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["recipes", search, protein, cuisine, appliance, maxTime, sort, !!user],
     enabled: !!user,
     queryFn: () => listMine({ data: params }),
@@ -212,6 +213,9 @@ function Recettes() {
         </div>
       </div>
 
+      {user && isLoading ? (
+        <RecipeCardSkeletonGrid count={9} />
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
         {(data ?? []).map((r: any) => (
           <RecipeCompactCard
@@ -246,6 +250,7 @@ function Recettes() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

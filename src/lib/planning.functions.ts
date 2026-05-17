@@ -177,8 +177,8 @@ const fridgeRecipeBaseSchema = z.object({
   protein: z.string(),
   vegetables: z.array(z.string()),
   calories: z.number().int().min(50).max(2000),
-  ingredients: z.array(z.object({ name: z.string().min(1), qty: z.string().min(1) })).min(6),
-  steps: z.array(z.object({ text: z.string().min(8), timer_minutes: z.number().int().min(0).optional(), appliance_settings: z.string().optional() })).min(5),
+  ingredients: z.array(z.object({ name: z.string().min(1), qty: z.string().min(1) })).min(3),
+  steps: z.array(z.object({ text: z.string().min(4), timer_minutes: z.number().int().min(0).optional(), appliance_settings: z.string().optional() })).min(3),
   missing_ingredients: z.array(z.string()).default([]),
   feasibility: z.number().int().min(0).max(100).optional(),
 });
@@ -189,6 +189,9 @@ const fridgeRecipeSchema: z.ZodType<FridgeRecipe, z.ZodTypeDef, unknown> = z.pre
 );
 const suggestionsSchema: z.ZodType<{ suggestions: FridgeRecipe[] }, z.ZodTypeDef, unknown> = z.object({
   suggestions: z.array(fridgeRecipeSchema).min(1).max(6),
+});
+const singleSuggestionSchema: z.ZodType<{ recipe: FridgeRecipe }, z.ZodTypeDef, unknown> = z.object({
+  recipe: fridgeRecipeSchema,
 });
 
 export const suggestFromFridge = createServerFn({ method: "POST" })

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Home, BookOpen, Refrigerator, CalendarDays, User, MessageCircle, Sparkles, Heart, ShoppingCart, Layers, History } from "lucide-react";
+import { Home, BookOpen, Refrigerator, CalendarDays, User, MessageCircle, Sparkles, Heart, ShoppingCart, Layers, History, MoreHorizontal } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 
@@ -7,8 +7,8 @@ const MOBILE_NAV = [
   { to: "/", label: "Accueil", icon: Home },
   { to: "/recettes", label: "Recettes", icon: BookOpen },
   { to: "/frigo", label: "Frigo", icon: Refrigerator },
-  { to: "/planning", label: "Planning", icon: CalendarDays },
-  { to: "/profil", label: "Profil", icon: User },
+  { to: "/mes-recettes", label: "Favoris", icon: Heart },
+  { to: "/historique", label: "Réalisées", icon: History },
 ] as const;
 
 const DESKTOP_NAV = [
@@ -61,6 +61,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <n.icon className="w-5 h-5" />{n.label}
           </Link>
         ))}
+        <Link to="/profil" className="flex flex-col items-center gap-1 px-2 py-1 text-xs" activeProps={{ className: "text-primary" }}>
+          <MoreHorizontal className="w-5 h-5" />Plus
+        </Link>
       </nav>
 
       {/* Floating chat */}

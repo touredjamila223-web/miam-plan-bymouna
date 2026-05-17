@@ -384,14 +384,18 @@ function normalizeShoppingOutput(raw: unknown) {
 
 const categoryMap: Record<string, string> = {
   "fruits et légumes": "Fruits & legumes",
+  "fruits et legumes": "Fruits & legumes",
   "fruits & légumes": "Fruits & legumes",
+  "fruits & legumes": "Fruits & legumes",
   legumes: "Fruits & legumes",
   légumes: "Fruits & legumes",
   boucherie: "Viandes & poissons",
   poissonnerie: "Viandes & poissons",
   "viandes et poissons": "Viandes & poissons",
+  "viandes & poissons": "Viandes & poissons",
   crémerie: "Cremerie",
   cremerie: "Cremerie",
+  "produits laitiers": "Cremerie",
   frais: "Cremerie",
   epicerie: "Epicerie",
   épicerie: "Epicerie",

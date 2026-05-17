@@ -19,7 +19,7 @@ async function generateJson<T>(opts: {
   model: any;
   system: string;
   prompt: string;
-  schema: z.ZodType<T>;
+  schema: z.ZodType<T, z.ZodTypeDef, any>;
   maxOutputTokens?: number;
 }) {
   const { text } = await generateText({

@@ -25,6 +25,13 @@ const TIME_OPTIONS = [
   { v: "60", label: "≤ 1 h" },
 ];
 
+const SORT_OPTIONS = [
+  { v: "recent", label: "Plus récentes" },
+  { v: "rated", label: "Mieux notées" },
+  { v: "loved", label: "Coups de cœur" },
+  { v: "todo", label: "À refaire" },
+] as const;
+
 function Recettes() {
   const location = useLocation();
   const listMine = useServerFn(listMyRecipes);
@@ -35,15 +42,17 @@ function Recettes() {
   const [protein, setProtein] = useState<string>("");
   const [cuisine, setCuisine] = useState<string>("");
   const [maxTime, setMaxTime] = useState<string>("0");
+  const [sort, setSort] = useState<"recent" | "rated" | "loved" | "todo">("recent");
 
   const params = {
     search: search || undefined,
     protein: protein || undefined,
     cuisine: cuisine || undefined,
     maxTime: maxTime && maxTime !== "0" ? Number(maxTime) : undefined,
+    sort,
   };
   const { data } = useQuery({
-    queryKey: ["recipes", search, protein, cuisine, maxTime, !!user],
+    queryKey: ["recipes", search, protein, cuisine, maxTime, sort, !!user],
     enabled: !!user,
     queryFn: () => listMine({ data: params }),
   });
@@ -98,7 +107,7 @@ function Recettes() {
       <div className="space-y-3">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
-          <Input className="pl-9" placeholder="Rechercher une recette..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input className="pl-9" placeholder="Recherche : titre, ingrédient, légume..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <Select value={protein} onValueChange={(v) => setProtein(v === "__all" ? "" : v)}>
@@ -119,6 +128,12 @@ function Recettes() {
             <SelectTrigger className="w-[140px]"><SelectValue placeholder="Temps"/></SelectTrigger>
             <SelectContent>
               {TIME_OPTIONS.map((t) => <SelectItem key={t.v} value={t.v}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={sort} onValueChange={(v) => setSort(v as any)}>
+            <SelectTrigger className="w-[160px]"><SelectValue placeholder="Trier"/></SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((s) => <SelectItem key={s.v} value={s.v}>{s.label}</SelectItem>)}
             </SelectContent>
           </Select>
           {hasFilters && (

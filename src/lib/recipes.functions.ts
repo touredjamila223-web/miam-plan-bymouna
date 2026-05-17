@@ -513,9 +513,9 @@ export const listMyRecipes = createServerFn({ method: "GET" })
       .limit(120);
     if (data?.search) {
       const q = `%${data.search}%`;
-      // recherche dans le titre, la description, les légumes et les ingrédients (jsonb -> text)
+      // recherche full-text simple sur les champs texte
       query = query.or(
-        `title.ilike.${q},description.ilike.${q},protein.ilike.${q},cuisine_style.ilike.${q},ingredients.cs.[{"name":"${data.search}"}]`,
+        `title.ilike.${q},description.ilike.${q},protein.ilike.${q},cuisine_style.ilike.${q}`,
       );
     }
     if (data?.protein) query = query.eq("protein", data.protein);

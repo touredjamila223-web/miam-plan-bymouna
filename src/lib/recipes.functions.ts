@@ -370,13 +370,15 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
     const family_name = profile.data?.family_name ?? null;
     const { data: existing } = await supabase
       .from("recipes")
-      .select("title")
+      .select("title, protein, vegetables, ingredients")
       .eq("owner_id", userId)
       .limit(300);
     const existingTitles = (existing ?? []).map((r) => r.title);
     const existingNorm = new Set(existingTitles.map(normalizeTitle));
+    const existingSigs = new Set((existing ?? []).map((r: any) => recipeSignature(r)).filter(Boolean));
     const exclude = Array.from(new Set([...(data.exclude ?? []), ...existingTitles]));
-    const isDuplicate = (r: any) => existingNorm.has(normalizeTitle(r.title));
+    const isDuplicate = (r: any) =>
+      existingNorm.has(normalizeTitle(r.title)) || existingSigs.has(recipeSignature(r));
     let kept = await generateBatchOnce({
       apiKey,
       appliance: data.appliance,
@@ -403,12 +405,18 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
         if (kept.length >= 4) break;
         if (violatesRestrictions(r, restrictions).length > 0) continue;
         if (isDuplicate(r)) continue;
-        if (kept.some((k) => normalizeTitle(k.title) === normalizeTitle(r.title))) continue;
+        if (kept.some((k) => isSimilarRecipe(k, r))) continue;
         kept.push(r);
       }
       safety += 1;
     }
-    return kept.slice(0, 4);
+    // Filtre intra-lot final : enlève les variantes proches entre elles
+    const unique: typeof kept = [];
+    for (const r of kept) {
+      if (unique.some((k) => isSimilarRecipe(k, r))) continue;
+      unique.push(r);
+    }
+    return unique.slice(0, 4);
   });
 
 export const deleteRecipe = createServerFn({ method: "POST" })

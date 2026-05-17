@@ -20,7 +20,7 @@ const DESKTOP_NAV = [
   { to: "/courses", label: "Courses", icon: ShoppingCart },
   { to: "/batch", label: "Batch cooking", icon: Layers },
   { to: "/mes-recettes", label: "Favoris", icon: Heart },
-  { to: "/historique", label: "Historique", icon: History },
+  { to: "/historique", label: "Réalisées", icon: History },
   { to: "/profil", label: "Profil", icon: User },
 ] as const;
 

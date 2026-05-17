@@ -362,26 +362,63 @@ export const clearCheckedShopping = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const shoppingGenSchema = z.object({
+function normalizeShoppingOutput(raw: unknown) {
+  if (!raw || typeof raw !== "object") return raw;
+  const data = raw as Record<string, any>;
+  if (Array.isArray(data.items)) return data;
+  const source = data.courses ?? data.liste_courses ?? data.shopping_list ?? data.liste;
+  if (!source || typeof source !== "object") return data;
+  const items: any[] = [];
+  for (const [category, rows] of Object.entries(source as Record<string, any>)) {
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      items.push({
+        item: String(row?.item ?? row?.name ?? row?.nom ?? row?.ingredient ?? "").trim(),
+        qty: String(row?.qty ?? row?.quantity ?? row?.quantite ?? row?.quantité ?? "").trim(),
+        category,
+      });
+    }
+  }
+  return { items };
+}
+
+const categoryMap: Record<string, string> = {
+  "fruits et légumes": "Fruits & legumes",
+  "fruits & légumes": "Fruits & legumes",
+  legumes: "Fruits & legumes",
+  légumes: "Fruits & legumes",
+  boucherie: "Viandes & poissons",
+  poissonnerie: "Viandes & poissons",
+  "viandes et poissons": "Viandes & poissons",
+  crémerie: "Cremerie",
+  cremerie: "Cremerie",
+  frais: "Cremerie",
+  epicerie: "Epicerie",
+  épicerie: "Epicerie",
+  boulangerie: "Boulangerie",
+  surgeles: "Surgeles",
+  surgelés: "Surgeles",
+  boissons: "Boissons",
+};
+
+const shoppingGenBaseSchema = z.object({
   items: z
     .array(
       z.object({
-        item: z.string(),
-        qty: z.string(),
-        category: z.enum([
-          "Fruits & legumes",
-          "Viandes & poissons",
-          "Cremerie",
-          "Epicerie",
-          "Boulangerie",
-          "Surgeles",
-          "Boissons",
-          "Autres",
-        ]),
+        item: z.string().min(1),
+        qty: z.string().default(""),
+        category: z.preprocess(
+          (value) => categoryMap[String(value ?? "").toLowerCase().trim()] ?? value ?? "Autres",
+          z.enum(["Fruits & legumes", "Viandes & poissons", "Cremerie", "Epicerie", "Boulangerie", "Surgeles", "Boissons", "Autres"]).default("Autres"),
+        ),
       }),
     )
     .min(1),
 });
+const shoppingGenSchema: z.ZodType<z.infer<typeof shoppingGenBaseSchema>, z.ZodTypeDef, unknown> = z.preprocess(
+  normalizeShoppingOutput,
+  shoppingGenBaseSchema,
+);
 
 export const generateShoppingFromPlan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

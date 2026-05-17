@@ -9,6 +9,59 @@ import { APPLIANCES } from "@/lib/constants";
 
 type Body = { messages?: UIMessage[]; userId?: string | null };
 
+function messageText(message: UIMessage | undefined) {
+  return (message?.parts ?? [])
+    .map((part: any) => (part?.type === "text" ? part.text : ""))
+    .join(" ")
+    .trim();
+}
+
+function normalizeText(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function findApplianceId(text: string, allowedIds: string[]) {
+  const explicitId = text.match(/id\s*:\s*([a-z0-9_-]+)/i)?.[1];
+  if (explicitId && allowedIds.includes(explicitId)) return explicitId;
+  const normalized = normalizeText(text);
+  return APPLIANCES.find((appliance) => {
+    if (!allowedIds.includes(appliance.id)) return false;
+    const candidates = [appliance.id, appliance.label, appliance.label.replace(/\s+/g, "-")];
+    return candidates.some((candidate) => {
+      const c = normalizeText(candidate);
+      return c.length >= 3 && normalized.includes(c);
+    });
+  })?.id;
+}
+
+function looksLikeRecipeRequest(text: string) {
+  const normalized = normalizeText(text);
+  if (!normalized) return false;
+  if (/\b(recette|cuisine|cuisiner|prepare|preparer|plat|repas|diner|dejeuner|propose|idee)\b/.test(normalized)) {
+    return true;
+  }
+  return /\b(soupe|poulet|boeuf|bœuf|veau|agneau|poisson|saumon|cabillaud|curry|tajine|gratin|pates|riz|lasagne|burger|salade|lentilles|legumes|omelette)\b/.test(
+    normalized,
+  );
+}
+
+function findPreviousDishPrompt(messages: UIMessage[], currentUserIndex: number, applianceIds: string[]) {
+  for (let i = currentUserIndex - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message?.role !== "user") continue;
+    const text = messageText(message);
+    const appliance = findApplianceId(text, applianceIds);
+    const isApplianceChoice = appliance && normalizeText(text).split(" ").length <= 8;
+    if (!isApplianceChoice && looksLikeRecipeRequest(text)) return text;
+  }
+  return "";
+}
+
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
@@ -40,6 +93,14 @@ Restrictions alimentaires : ${prefs2}.`;
         const userApplianceOptions = (userAppliances.length ? userAppliances : applianceIds)
           .filter((id) => applianceIds.includes(id))
           .map((id) => ({ id, label: APPLIANCES.find((a) => a.id === id)?.label ?? id }));
+
+        const lastUserIndex = messages.map((m) => m.role).lastIndexOf("user");
+        const lastUserText = messageText(messages[lastUserIndex]);
+        const selectedAppliance = findApplianceId(lastUserText, applianceIds);
+        const previousDishPrompt = findPreviousDishPrompt(messages, lastUserIndex, applianceIds);
+        const routeDishPrompt = previousDishPrompt || (looksLikeRecipeRequest(lastUserText) ? lastUserText : "");
+        const shouldProposeNow = Boolean(userId && selectedAppliance && routeDishPrompt);
+        const shouldAskApplianceNow = Boolean(userId && !selectedAppliance && looksLikeRecipeRequest(lastUserText));
 
         const tools = userId
           ? {
@@ -75,7 +136,9 @@ Restrictions alimentaires : ${prefs2}.`;
                 }),
                 execute: async ({ prompt, appliance }) => {
                   try {
-                    const recipe = await generateRecipeForUser({ userId, prompt, appliance });
+                    const safePrompt = routeDishPrompt || prompt;
+                    const safeAppliance = selectedAppliance || appliance;
+                    const recipe = await generateRecipeForUser({ userId, prompt: safePrompt, appliance: safeAppliance });
                     return recipe;
                   } catch (e: any) {
                     console.error("proposeRecipe failed", e);
@@ -90,7 +153,12 @@ Restrictions alimentaires : ${prefs2}.`;
         const result = streamText({
           model: gateway("google/gemini-2.5-flash"),
           tools,
-          stopWhen: stepCountIs(50),
+          toolChoice: shouldProposeNow
+            ? { type: "tool", toolName: "proposeRecipe" }
+            : shouldAskApplianceNow
+              ? { type: "tool", toolName: "askAppliance" }
+              : "auto",
+          stopWhen: stepCountIs(1),
           system: `Tu es Leia, l'assistante culinaire chaleureuse et précise de MiamPlan. Tu aides la famille à cuisiner sainement et à se faire plaisir.
 
 Règles IMPÉRATIVES pour les recettes :
@@ -100,6 +168,8 @@ Règles IMPÉRATIVES pour les recettes :
 - Si l'utilisateur dit "une autre", "propose autre chose", "varie", appelle à nouveau proposeRecipe avec une orientation différente (style culinaire, protéine ou technique différente) en gardant le même appareil sauf indication contraire.
 - Après l'appel à proposeRecipe, contente-toi d'une phrase d'accroche courte ("Voilà ma proposition 🍽️ — tu peux la sauvegarder ou passer en mode cuisine.").
 - Évite d'écrire des questions à choix en texte libre quand un outil "askAppliance" peut le faire à ta place.
+
+État détecté côté serveur : ${shouldProposeNow ? `appelle proposeRecipe avec prompt="${routeDishPrompt}" et appliance="${selectedAppliance}".` : shouldAskApplianceNow ? "appelle askAppliance pour afficher les boutons d'appareils." : "pas d'action recette forcée."}
 
 Pour les autres conversations (conseils, équivalents d'ingrédients, batch cooking, idées de semaine), réponds normalement en français, de manière concise et conviviale.${ctxBlock}`,
           messages: await convertToModelMessages(messages),

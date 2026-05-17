@@ -93,14 +93,26 @@ function normalizeFridgeRecipe(raw: unknown) {
     ? ingredientsSource.map((ing: any) =>
         typeof ing === "string"
           ? { name: ing, qty: "à ajuster" }
-          : { name: String(ing?.name ?? ing?.nom ?? ing?.ingredient ?? ""), qty: String(ing?.qty ?? ing?.quantity ?? ing?.quantite ?? ing?.quantité ?? "à ajuster") },
+          : {
+              name: extractIngredientName(ing),
+              qty: String(
+                ing?.qty ?? ing?.quantity ?? ing?.quantite ?? ing?.quantité ?? ing?.amount ?? ing?.dose ?? "à ajuster",
+              ),
+            },
       )
+        .filter((ing: any) => ing.name && ing.name.length > 0)
     : [];
   const stepsSource = Array.isArray(r.steps) ? r.steps : Array.isArray(r.instructions) ? r.instructions : Array.isArray(r.etapes) ? r.etapes : [];
   const steps = stepsSource.map((step: any) =>
     typeof step === "string"
       ? { text: step, timer_minutes: 0 }
-      : { text: String(step?.text ?? step?.texte ?? step?.instruction ?? step?.description ?? ""), timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? step?.minutes ?? 0) || 0, appliance_settings: step?.appliance_settings ?? step?.reglage_appareil ?? step?.settings },
+      : {
+          text: String(step?.text ?? step?.texte ?? step?.instruction ?? step?.description ?? ""),
+          timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? step?.minutes ?? 0) || 0,
+          appliance_settings: stringifySettings(
+            step?.appliance_settings ?? step?.reglage_appareil ?? step?.réglage_appareil ?? step?.settings ?? step?.parametres,
+          ),
+        },
   );
 
   return {

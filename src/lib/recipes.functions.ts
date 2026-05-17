@@ -323,7 +323,7 @@ export const generateRecipe = createServerFn({ method: "POST" })
     const family_name = profile.data?.family_name;
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-3-flash-preview");
+    const model = gateway("google/gemini-2.5-flash");
 
     return generateJson({
       model,
@@ -349,7 +349,7 @@ export async function generateRecipeForUser(opts: {
   const servings = profile.data?.household_size ?? 4;
   const family_name = profile.data?.family_name ?? null;
   const gateway = createLovableAiGatewayProvider(apiKey);
-  const model = gateway("google/gemini-3-flash-preview");
+  const model = gateway("google/gemini-2.5-flash");
   return generateJson({
     model,
     system: buildSystemPrompt({ appliance: opts.appliance, restrictions, servings, family_name }),
@@ -367,7 +367,7 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error("Clé Lovable AI manquante");
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-3-flash-preview");
+    const model = gateway("google/gemini-2.5-flash");
     return generateJson({
       model,
       system: buildSystemPrompt({
@@ -417,7 +417,7 @@ async function generateBatchOnce(opts: {
   hint?: string;
 }) {
   const gateway = createLovableAiGatewayProvider(opts.apiKey);
-  const model = gateway("google/gemini-3-flash-preview");
+  const model = gateway("google/gemini-2.5-flash");
   const object = await generateJson({
     model,
     system: buildSystemPrompt({
@@ -576,7 +576,7 @@ export const refreshRecipeSteps = createServerFn({ method: "POST" })
     const appliance = recipe.appliance ?? "cookeo";
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-3-flash-preview");
+    const model = gateway("google/gemini-2.5-flash");
 
     const result = await generateJson({
       model,
@@ -679,7 +679,7 @@ export const importRecipeFromUrl = createServerFn({ method: "POST" })
     const servings = profile.data?.household_size ?? 4;
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-3-flash-preview");
+    const model = gateway("google/gemini-2.5-flash");
 
     return generateJson({
       model,
@@ -721,7 +721,7 @@ export const importRecipeFromImage = createServerFn({ method: "POST" })
     const servings = profile.data?.household_size ?? 4;
 
     const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-3-flash-preview");
+    const model = gateway("google/gemini-2.5-flash");
 
     const { text } = await generateText({
       model,

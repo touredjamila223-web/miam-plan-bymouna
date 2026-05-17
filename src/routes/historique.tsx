@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { History, Star, Heart, ChefHat } from "lucide-react";
 
 export const Route = createFileRoute("/historique")({
-  head: () => ({ meta: [{ title: "Historique — MiamPlan" }] }),
+  head: () => ({ meta: [{ title: "Recettes réalisées — MiamPlan" }] }),
   component: HistoriquePage,
 });
 
@@ -28,7 +28,7 @@ function HistoriquePage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-bold flex items-center gap-2"><History className="w-7 h-7 text-primary" />Historique</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2"><History className="w-7 h-7 text-primary" />Recettes réalisées</h1>
         <p className="text-muted-foreground">Vos repas cuisinés et leur note. L'IA s'en sert pour mieux vous proposer.</p>
       </header>
 

@@ -8,20 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PROTEINS, CUISINE_STYLES } from "@/lib/constants";
-import { Search, Clock, Flame, Carrot, X, Sparkles } from "lucide-react";
-
-function proteinEmoji(p?: string | null) {
-  if (!p) return "🍽️";
-  const v = p.toLowerCase();
-  if (v.includes("boeuf") || v.includes("bœuf") || v.includes("agneau") || v.includes("veau")) return "🥩";
-  if (v.includes("porc") || v.includes("jambon") || v.includes("lard")) return "🥓";
-  if (v.includes("poulet") || v.includes("dinde") || v.includes("volaille") || v.includes("canard")) return "🍗";
-  if (v.includes("poisson") || v.includes("saumon") || v.includes("thon") || v.includes("cabillaud") || v.includes("fruits de mer") || v.includes("crevette")) return "🐟";
-  if (v.includes("oeuf") || v.includes("œuf")) return "🥚";
-  if (v.includes("fromage")) return "🧀";
-  if (v.includes("tofu") || v.includes("legumineuse") || v.includes("légumineuse") || v.includes("vege") || v.includes("végé")) return "🥦";
-  return "🍽️";
-}
+import { RecipeCompactCard } from "@/components/recipe-compact-card";
+import { Search, X, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/recettes")({
   head: () => ({ meta: [{ title: "Bibliothèque de recettes — MiamPlan" }] }),
@@ -104,29 +92,7 @@ function Recettes() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
         {(data ?? []).map((r: any) => (
-          <Link
-            key={r.id}
-            to="/recettes/$id"
-            params={{ id: r.id }}
-            className="bg-card border border-border rounded-xl p-3 hover:border-primary/40 hover:shadow-sm transition flex flex-col gap-1.5"
-          >
-            <h2 className="font-semibold leading-tight text-sm flex items-start gap-1.5">
-              <span className="text-base leading-none mt-0.5" aria-hidden>{proteinEmoji(r.protein)}</span>
-              <span className="flex-1 line-clamp-2">{r.title}</span>
-            </h2>
-            <div className="flex flex-wrap items-center gap-1 text-[10.5px] text-muted-foreground">
-              <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">Familial</span>
-              {r.protein && <span className="bg-accent/50 px-1.5 py-0.5 rounded-full capitalize">{r.protein}</span>}
-              {r.cuisine_style && <span className="bg-secondary/60 px-1.5 py-0.5 rounded-full capitalize">{r.cuisine_style}</span>}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3"/>{r.prep_time} min</span>
-              {r.calories != null && <span className="inline-flex items-center gap-1"><Flame className="w-3 h-3"/>{r.calories} kcal</span>}
-            </div>
-            {r.vegetables && r.vegetables.length > 0 && (
-              <p className="text-[11px] text-muted-foreground inline-flex items-start gap-1 line-clamp-1"><Carrot className="w-3 h-3 mt-0.5 shrink-0"/><span className="line-clamp-1">{r.vegetables.slice(0, 5).join(", ")}</span></p>
-            )}
-          </Link>
+          <RecipeCompactCard key={r.id} recipe={r} />
         ))}
         {!user && (
           <div className="col-span-full text-center py-12 space-y-3">

@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listFavorites } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { ChefHat, Heart } from "lucide-react";
+import { RecipeCompactCard } from "@/components/recipe-compact-card";
+import { Heart } from "lucide-react";
 
 export const Route = createFileRoute("/mes-recettes")({
   head: () => ({ meta: [{ title: "Mes recettes — MiamPlan" }] }),
@@ -30,12 +31,9 @@ function MesRecettes() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Mes recettes ❤️</h1>
       {recipes.length === 0 && <p className="text-muted-foreground">Aucun favori pour l'instant. Ajoutez-en depuis la <Link to="/recettes" className="text-primary underline">bibliothèque</Link>.</p>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
         {recipes.map((r) => (
-          <Link key={r.id} to="/recettes/$id" params={{ id: r.id }} className="bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg transition">
-            <div className="aspect-[4/3] bg-gradient-to-br from-accent/40 to-secondary/40 flex items-center justify-center"><ChefHat className="w-10 h-10 text-primary/40"/></div>
-            <div className="p-4"><h2 className="font-semibold">{r.title}</h2><p className="text-xs text-muted-foreground">{r.cuisine_style} • {r.prep_time} min</p></div>
-          </Link>
+          <RecipeCompactCard key={r.id} recipe={r} />
         ))}
       </div>
     </div>

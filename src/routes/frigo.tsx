@@ -11,7 +11,7 @@ import {
 } from "@/lib/planning.functions";
 import { saveRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { Refrigerator, Plus, X, Sparkles, RefreshCw, Save, Clock, Flame, Carrot, ChefHat } from "lucide-react";
+import { Refrigerator, Plus, X, Sparkles, RefreshCw, Save, Clock, Flame, Carrot } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export const Route = createFileRoute("/frigo")({
@@ -73,6 +73,7 @@ function FrigoPage() {
     try {
       await save({ data: { recipes: picks.map((r) => ({ ...r, source: "ai" })) } });
       toast.success(`${picks.length} recette(s) ajoutée(s) à ta bibliothèque !`);
+      qc.invalidateQueries({ queryKey: ["recipes"] });
       setSuggestions(null);
       setSelected({});
     } catch (e: any) {
@@ -148,7 +149,7 @@ function FrigoPage() {
                         <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3"/>{s.prep_time} min</span>
                         {s.calories != null && <span className="inline-flex items-center gap-1"><Flame className="w-3 h-3"/>{s.calories} kcal</span>}
                       </div>
-                      <h3 className="font-bold leading-tight flex items-center gap-2"><ChefHat className="w-4 h-4 text-primary"/>{s.title}</h3>
+                      <h3 className="font-bold leading-tight">{s.title}</h3>
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{s.description}</p>
                       {s.vegetables?.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-1.5 inline-flex items-center gap-1"><Carrot className="w-3 h-3"/>{s.vegetables.join(", ")}</p>

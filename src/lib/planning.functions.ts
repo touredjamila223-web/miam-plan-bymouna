@@ -19,7 +19,7 @@ async function generateJson<T>(opts: {
   model: any;
   system: string;
   prompt: string;
-  schema: z.ZodType<T>;
+  schema: z.ZodType<T, z.ZodTypeDef, any>;
   maxOutputTokens?: number;
 }) {
   const { text } = await generateText({
@@ -78,7 +78,47 @@ export const removeFridgeItem = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const fridgeRecipeSchema = z.object({
+function splitList(value: unknown) {
+  if (Array.isArray(value)) return value.map(String).map((v) => v.trim()).filter(Boolean);
+  if (typeof value === "string") return value.split(/[,;\n]/).map((v) => v.trim()).filter(Boolean);
+  return [];
+}
+
+function normalizeFridgeRecipe(raw: unknown) {
+  if (!raw || typeof raw !== "object") return raw;
+  const r = raw as Record<string, any>;
+  const ingredients = Array.isArray(r.ingredients)
+    ? r.ingredients.map((ing: any) =>
+        typeof ing === "string"
+          ? { name: ing, qty: "" }
+          : { name: String(ing?.name ?? ing?.ingredient ?? ""), qty: String(ing?.qty ?? ing?.quantity ?? "") },
+      )
+    : [];
+  const stepsSource = Array.isArray(r.steps) ? r.steps : Array.isArray(r.instructions) ? r.instructions : [];
+  const steps = stepsSource.map((step: any) =>
+    typeof step === "string"
+      ? { text: step, timer_minutes: 0 }
+      : { text: String(step?.text ?? step?.instruction ?? step?.description ?? ""), timer_minutes: Number(step?.timer_minutes ?? step?.timer ?? step?.minutes ?? 0) || 0 },
+  );
+
+  return {
+    title: String(r.title ?? r.name ?? "Recette du frigo"),
+    description: String(r.description ?? r.summary ?? r.title ?? "Une recette cohérente avec les ingrédients disponibles."),
+    cuisine_style: String(r.cuisine_style ?? r.cuisine ?? r.origin ?? "familial").toLowerCase(),
+    difficulty: ["facile", "moyen", "difficile"].includes(r.difficulty) ? r.difficulty : "facile",
+    prep_time: Math.max(5, Math.round(Number(r.prep_time ?? r.preparation_time ?? r.total_time ?? r.cook_time ?? 25)) || 25),
+    servings: Math.max(1, Math.round(Number(r.servings ?? r.portions ?? 4)) || 4),
+    appliance: String(r.appliance ?? r.device ?? "cookeo"),
+    protein: String(r.protein ?? r.proteine ?? r.main_protein ?? "végétarien").toLowerCase(),
+    vegetables: splitList(r.vegetables ?? r.legumes),
+    calories: Math.max(50, Math.round(Number(r.calories ?? r.kcal ?? 500)) || 500),
+    ingredients,
+    steps,
+    missing_ingredients: splitList(r.missing_ingredients ?? r.to_buy ?? r.a_acheter),
+  };
+}
+
+const fridgeRecipeBaseSchema = z.object({
   title: z.string(),
   description: z.string(),
   cuisine_style: z.string(),
@@ -93,7 +133,14 @@ const fridgeRecipeSchema = z.object({
   steps: z.array(z.object({ text: z.string(), timer_minutes: z.number().int().min(0).optional() })).min(2),
   missing_ingredients: z.array(z.string()).default([]),
 });
-const suggestionsSchema = z.object({ suggestions: z.array(fridgeRecipeSchema).min(1).max(6) });
+type FridgeRecipe = z.infer<typeof fridgeRecipeBaseSchema>;
+const fridgeRecipeSchema: z.ZodType<FridgeRecipe, z.ZodTypeDef, unknown> = z.preprocess(
+  normalizeFridgeRecipe,
+  fridgeRecipeBaseSchema,
+);
+const suggestionsSchema: z.ZodType<{ suggestions: FridgeRecipe[] }, z.ZodTypeDef, unknown> = z.object({
+  suggestions: z.array(fridgeRecipeSchema).min(1).max(6),
+});
 
 export const suggestFromFridge = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -116,7 +163,7 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
-    const object = await generateJson({
+    const object = await generateJson<{ suggestions: FridgeRecipe[] }>({
       model,
       system: `Tu es un chef qui propose 4 recettes COMPLETES, COHERENTES et VARIEES realisables avec le frigo de la famille.
 Regles ABSOLUES :

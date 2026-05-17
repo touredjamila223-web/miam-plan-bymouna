@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { APPLIANCES } from "@/lib/constants";
-import { Sparkles, Clock, Users, Flame, Carrot, Drumstick, RefreshCw, Save } from "lucide-react";
+import { Sparkles, Clock, Users, Flame, Carrot, Drumstick, RefreshCw, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/generer")({
@@ -23,6 +23,7 @@ function Generer() {
   const [hint, setHint] = useState("");
   const [recipes, setRecipes] = useState<any[]>([]);
   const [selected, setSelected] = useState<Record<number, boolean>>({});
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(false);
 
   const genBatch = useServerFn(generateRecipeBatch);
@@ -32,6 +33,7 @@ function Generer() {
     setLoading(true);
     setRecipes([]);
     setSelected({});
+    setExpanded({});
     try {
       const list = await genBatch({ data: { appliance, hint: hint || undefined } });
       setRecipes(list);
@@ -118,6 +120,33 @@ function Generer() {
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{r.description}</p>
                       {r.vegetables?.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-2 inline-flex items-center gap-1"><Carrot className="w-3 h-3"/>{r.vegetables.join(", ")}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); setExpanded((s) => ({ ...s, [i]: !s[i] })); }}
+                        className="mt-2 text-xs text-primary inline-flex items-center gap-1 hover:underline"
+                      >
+                        {expanded[i] ? <><ChevronUp className="w-3 h-3"/>Masquer le détail</> : <><ChevronDown className="w-3 h-3"/>Voir le détail</>}
+                      </button>
+                      {expanded[i] && (
+                        <div className="mt-2 pt-2 border-t border-border space-y-2 text-xs">
+                          <div>
+                            <p className="font-semibold mb-1">Ingrédients</p>
+                            <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                              {r.ingredients?.map((ing: any, k: number) => (
+                                <li key={k}>{ing.qty ? `${ing.qty} ` : ""}{ing.name}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="font-semibold mb-1">Étapes</p>
+                            <ol className="list-decimal list-inside space-y-0.5 text-muted-foreground">
+                              {r.steps?.map((s: any, k: number) => (
+                                <li key={k}>{s.text}{s.timer_minutes ? ` (${s.timer_minutes} min)` : ""}</li>
+                              ))}
+                            </ol>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>

@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { listMealPlan, upsertMealPlan, removeMealPlan } from "@/lib/planning.functions";
+import { listMealPlan, upsertMealPlan, removeMealPlan, generateWeekPlan } from "@/lib/planning.functions";
 import { listMyRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { CalendarDays, X, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { CalendarDays, X, ChevronLeft, ChevronRight, Plus, Sparkles, Download } from "lucide-react";
+import { generateWeekPlanPdf } from "@/lib/planning-pdf";
 
 export const Route = createFileRoute("/planning")({
   head: () => ({ meta: [{ title: "Planning — MiamPlan" }] }),
@@ -33,6 +34,8 @@ function PlanningPage() {
   const upsert = useServerFn(upsertMealPlan);
   const remove = useServerFn(removeMealPlan);
   const listRec = useServerFn(listMyRecipes);
+  const fillWeekFn = useServerFn(generateWeekPlan);
+  const [filling, setFilling] = useState(false);
 
   const { data: plan } = useQuery({
     queryKey: ["plan", weekStartStr],
@@ -67,6 +70,34 @@ function PlanningPage() {
 
   const [picker, setPicker] = useState<{ date: string; slot: "matin" | "midi" | "soir" } | null>(null);
 
+  async function autoFillWeek(replace: boolean) {
+    if (filling) return;
+    if (replace && !window.confirm("Remplacer toutes les recettes déjà planifiées cette semaine ?")) return;
+    setFilling(true);
+    try {
+      const res = await fillWeekFn({ data: { week_start: weekStartStr, slots: ["midi", "soir"], replace } });
+      toast.success(`${res.inserted} repas ajoutés à la semaine`);
+      qc.invalidateQueries({ queryKey: ["plan", weekStartStr] });
+    } catch (e: any) {
+      toast.error(e.message ?? "Erreur");
+    } finally {
+      setFilling(false);
+    }
+  }
+
+  function downloadPdf() {
+    if (!plan?.length) {
+      toast.error("Le planning est vide");
+      return;
+    }
+    try {
+      generateWeekPlanPdf(weekStartStr, plan as any);
+      toast.success("PDF téléchargé");
+    } catch (e: any) {
+      toast.error(e.message ?? "Erreur PDF");
+    }
+  }
+
   if (!user) {
     return (
       <div className="text-center py-16">
@@ -100,6 +131,30 @@ function PlanningPage() {
           <button onClick={() => shiftWeek(1)} className="p-2 rounded-lg border border-border hover:bg-accent/20"><ChevronRight className="w-4 h-4" /></button>
         </div>
       </header>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => autoFillWeek(false)}
+          disabled={filling}
+          className="bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-medium inline-flex items-center gap-2 disabled:opacity-60"
+        >
+          <Sparkles className="w-4 h-4" />{filling ? "L'IA compose…" : "Remplir ma semaine (IA)"}
+        </button>
+        <button
+          onClick={() => autoFillWeek(true)}
+          disabled={filling}
+          className="border border-border px-3 py-2 rounded-full text-sm inline-flex items-center gap-2 disabled:opacity-60"
+          title="Remplacer le planning existant"
+        >
+          Régénérer tout
+        </button>
+        <button
+          onClick={downloadPdf}
+          className="border border-border px-3 py-2 rounded-full text-sm inline-flex items-center gap-2"
+        >
+          <Download className="w-4 h-4" />PDF
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
         {days.map((d, i) => {

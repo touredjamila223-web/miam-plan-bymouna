@@ -319,6 +319,31 @@ export const generateRecipe = createServerFn({ method: "POST" })
     });
   });
 
+// Helper réutilisable côté serveur (chat IA "Leia", etc.)
+export async function generateRecipeForUser(opts: {
+  userId: string;
+  prompt: string;
+  appliance: string;
+}) {
+  const apiKey = process.env.LOVABLE_API_KEY;
+  if (!apiKey) throw new Error("Clé Lovable AI manquante");
+  const [profile, prefs] = await Promise.all([
+    supabaseAdmin.from("profiles").select("*").eq("id", opts.userId).maybeSingle(),
+    supabaseAdmin.from("dietary_preferences").select("restriction").eq("user_id", opts.userId),
+  ]);
+  const restrictions = (prefs.data ?? []).map((p) => p.restriction);
+  const servings = profile.data?.household_size ?? 4;
+  const family_name = profile.data?.family_name ?? null;
+  const gateway = createLovableAiGatewayProvider(apiKey);
+  const model = gateway("google/gemini-3-flash-preview");
+  return generateJson({
+    model,
+    system: buildSystemPrompt({ appliance: opts.appliance, restrictions, servings, family_name }),
+    prompt: `Génère une recette complète pour : ${opts.prompt}`,
+    schema: recipeSchema,
+  });
+}
+
 // Public — generate without account (guest mode)
 export const generateRecipePublic = createServerFn({ method: "POST" })
   .inputValidator((input) =>

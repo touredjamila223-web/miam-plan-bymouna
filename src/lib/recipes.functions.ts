@@ -523,7 +523,33 @@ export const listMyRecipes = createServerFn({ method: "GET" })
     if (data?.maxTime) query = query.lte("prep_time", data.maxTime);
     const { data: rows, error } = await query.order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
-    const recipes = rows ?? [];
+    let recipes = rows ?? [];
+    // Recherche élargie (ingrédients + légumes) — fait via une 2e requête pour les recettes
+    // dont le texte ne matchait pas le titre/description.
+    if (data?.search) {
+      const term = data.search.toLowerCase();
+      const { data: extra } = await supabase
+        .from("recipes")
+        .select(
+          "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories, ingredients",
+        )
+        .eq("owner_id", userId)
+        .limit(120);
+      const matchExtra = (extra ?? []).filter((r: any) => {
+        const vegHit = (r.vegetables ?? []).some((v: string) => v?.toLowerCase().includes(term));
+        const ingHit = Array.isArray(r.ingredients)
+          ? r.ingredients.some((i: any) => (i?.name ?? "").toLowerCase().includes(term))
+          : false;
+        return vegHit || ingHit;
+      });
+      const known = new Set(recipes.map((r) => r.id));
+      for (const r of matchExtra) {
+        if (!known.has(r.id)) {
+          const { ingredients, ...rest } = r as any;
+          recipes.push(rest);
+        }
+      }
+    }
     if (!recipes.length) return [];
 
     // Récupère les notes (cooked_history) pour ces recettes

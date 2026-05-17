@@ -9,10 +9,23 @@ import {
   toggleShoppingItem,
   removeShoppingItem,
   clearCheckedShopping,
+  clearAllShopping,
   generateShoppingFromPlan,
 } from "@/lib/planning.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { ShoppingCart, Plus, X, Sparkles, Trash2 } from "lucide-react";
+import { ShoppingCart, Plus, X, Sparkles, Trash2, FileDown, RotateCcw } from "lucide-react";
+import { generateShoppingPdf } from "@/lib/shopping-pdf";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/courses")({
   head: () => ({ meta: [{ title: "Courses — MiamPlan" }] }),
@@ -35,6 +48,7 @@ function CoursesPage() {
   const toggle = useServerFn(toggleShoppingItem);
   const remove = useServerFn(removeShoppingItem);
   const clearChecked = useServerFn(clearCheckedShopping);
+  const clearAll = useServerFn(clearAllShopping);
   const gen = useServerFn(generateShoppingFromPlan);
 
   const { data: items } = useQuery({
@@ -76,6 +90,20 @@ function CoursesPage() {
     qc.invalidateQueries({ queryKey: ["shopping"] });
   }
 
+  async function resetAll() {
+    await clearAll();
+    toast.success("Liste réinitialisée");
+    qc.invalidateQueries({ queryKey: ["shopping"] });
+  }
+
+  function exportPdf() {
+    if (!items?.length) {
+      toast.error("Liste vide");
+      return;
+    }
+    generateShoppingPdf(items as any);
+  }
+
   if (!user) {
     return (
       <div className="text-center py-16">
@@ -101,7 +129,23 @@ function CoursesPage() {
         </div>
         <div className="flex gap-2">
           <button onClick={runGenerate} disabled={loading} className="bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm flex items-center gap-2 disabled:opacity-50"><Sparkles className="w-4 h-4" />{loading ? "..." : "Depuis le planning"}</button>
+          <button onClick={exportPdf} className="border border-border px-3 py-2 rounded-full text-sm flex items-center gap-2 hover:bg-accent/20"><FileDown className="w-4 h-4" />PDF</button>
           <button onClick={clearDone} className="border border-border px-3 py-2 rounded-full text-sm flex items-center gap-2 hover:bg-accent/20"><Trash2 className="w-4 h-4" />Vider cochés</button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button className="border border-destructive/40 text-destructive px-3 py-2 rounded-full text-sm flex items-center gap-2 hover:bg-destructive/10"><RotateCcw className="w-4 h-4" />Réinitialiser</button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Réinitialiser la liste ?</AlertDialogTitle>
+                <AlertDialogDescription>Tous les articles seront supprimés. Cette action est irréversible.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction onClick={resetAll}>Réinitialiser</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </header>
 

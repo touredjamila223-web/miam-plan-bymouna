@@ -16,7 +16,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { StrictDietBanner } from "@/components/strict-diet-banner";
 import { useNavigate } from "@tanstack/react-router";
 import { APPLIANCES } from "@/lib/constants";
-import { useQuery as useQuery2 } from "@tanstack/react-query";
 import { getFamilyContext } from "@/lib/family.functions";
 
 export const Route = createFileRoute("/frigo")({
@@ -41,7 +40,7 @@ function FrigoPage() {
     enabled: !!user,
   });
 
-  const { data: ctx } = useQuery2({
+  const { data: ctx } = useQuery({
     queryKey: ["family-ctx"],
     queryFn: () => getCtx(),
     enabled: !!user,

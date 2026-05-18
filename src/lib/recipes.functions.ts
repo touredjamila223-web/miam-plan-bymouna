@@ -420,7 +420,7 @@ Règles ABSOLUES :
 - La description doit expliquer le goût du plat (sauce, parfum, texture) et pas seulement répéter le titre.
 - Étapes claires, numérotées implicitement, avec timer en minutes quand il y a une cuisson minutée.
 - Tout doit être en français.
-- FORMAT DE SORTIE STRICT : un seul objet JSON avec EXACTEMENT ces clés racines en anglais : title, description, cuisine_style, difficulty, prep_time, servings, appliance, protein, vegetables, calories, ingredients, steps, missing_ingredients. Dans ingredients, chaque entrée = {"name":"...","qty":"..."}. Dans steps, chaque entrée = {"text":"...","timer_minutes":0,"appliance_settings":"..."}. N'utilise jamais les clés françaises "titre", "ingrédients", "étapes", "quantité".`;
+- FORMAT DE SORTIE STRICT : un seul objet JSON avec EXACTEMENT ces clés racines en anglais : title, description, cuisine_style, course_type, difficulty, prep_time, servings, appliance, protein, vegetables, calories, ingredients, steps, missing_ingredients. Le champ "course_type" DOIT valoir exactement "${ctx.course_type ?? "plat"}". Dans ingredients, chaque entrée = {"name":"...","qty":"..."}. Dans steps, chaque entrée = {"text":"...","timer_minutes":0,"appliance_settings":"..."}. N'utilise jamais les clés françaises "titre", "ingrédients", "étapes", "quantité".`;
 }
 
 const generateInput = z.object({

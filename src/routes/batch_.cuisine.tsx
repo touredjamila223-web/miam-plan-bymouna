@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X, Play, Pause, RotateCcw, Check, Layers } from "lucide-react";
 
-export const Route = createFileRoute("/batch/cuisine")({
+export const Route = createFileRoute("/batch_/cuisine")({
   head: () => ({ meta: [{ title: "Mode cuisine batch — MiamPlan" }] }),
   component: BatchCookingMode,
 });

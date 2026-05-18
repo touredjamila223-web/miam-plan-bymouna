@@ -366,6 +366,104 @@ const recipeSchema: z.ZodType<RecipeDto, z.ZodTypeDef, unknown> = z.preprocess(
   recipeBaseSchema.transform(validateRecipeQuality),
 );
 
+function isAiPaymentError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const anyError = error as any;
+  return message.includes("Payment Required") || anyError?.status === 402 || anyError?.statusCode === 402 || anyError?.response?.status === 402;
+}
+
+function applianceSetting(appliance: string, duration: number, temperature = "") {
+  const a = appliance.toLowerCase();
+  if (a.includes("cookeo")) return `Cookeo Smart Wifi : Rissolage intensité moyen 5 min puis Cuisson sous pression intensité fort ${duration} min, couvercle fermé verrouillé avec au moins 250 ml de liquide`;
+  if (a.includes("air")) return `Airfryer : ${temperature || "180°C"}, ${duration} min, panier secoué à mi-cuisson après préchauffage 3 min`;
+  if (a.includes("four")) return `Four : chaleur tournante ${temperature || "180°C"}, grille au milieu, ${duration} min après préchauffage`;
+  if (a.includes("monsieur")) return `Monsieur Cuisine Smart : mode Sauté vitesse 1 sens inverse 120 °C 6 min puis Mijotage vitesse 1 sens inverse 95 °C ${duration} min`;
+  return `${appliance} : feu moyen 5/9 puis doux 3/9, cuisson couverte ${duration} min avec surveillance`;
+}
+
+function fallbackRecipe(opts: {
+  prompt: string;
+  appliance: string;
+  servings: number;
+  restrictions: string[];
+  course_type?: "plat" | "entree" | "soupe" | "dessert";
+  variant?: number;
+}): RecipeDto & { ai_fallback?: boolean } {
+  const course = opts.course_type ?? "plat";
+  const vegetarian = opts.restrictions.some((r) => ["vegetarien", "vegetalien"].includes(r));
+  const baseProtein = vegetarian ? "légumineuses" : "poulet";
+  const variants = [
+    { style: "méditerranéen", title: vegetarian ? "Mijoté méditerranéen de lentilles aux légumes" : "Poulet méditerranéen aux légumes fondants", protein: baseProtein, vegetables: ["courgette", "tomate", "poivron"], ingredients: [[vegetarian ? "lentilles vertes" : "poulet", vegetarian ? "320 g" : "600 g"], ["courgettes", "500 g"], ["tomates concassées", "400 g"], ["poivron rouge", "180 g"], ["riz", "300 g"], ["huile d'olive", "30 ml"], ["citron", "40 ml"], ["origan", "2 c. à café"]], minutes: 32 },
+    { style: "indien", title: vegetarian ? "Curry de lentilles corail et patate douce" : "Curry de poulet coco aux épinards", protein: baseProtein, vegetables: ["patate douce", "épinards", "tomate"], ingredients: [[vegetarian ? "lentilles corail" : "poulet", vegetarian ? "320 g" : "600 g"], ["patate douce", "500 g"], ["épinards", "200 g"], ["lait de coco", "300 ml"], ["riz basmati", "300 g"], ["curry", "2 c. à café"], ["garam masala", "1 c. à café"], ["gingembre", "15 g"]], minutes: 28 },
+    { style: "tex-mex", title: vegetarian ? "Chili doux de haricots rouges et maïs" : "Poulet tex-mex au riz, maïs et tomates", protein: baseProtein, vegetables: ["tomate", "maïs", "poivron"], ingredients: [[vegetarian ? "haricots rouges" : "poulet", vegetarian ? "500 g" : "600 g"], ["maïs", "250 g"], ["tomates concassées", "400 g"], ["poivron", "180 g"], ["riz", "300 g"], ["cumin", "2 c. à café"], ["paprika fumé", "2 c. à café"], ["citron vert", "40 ml"]], minutes: 30 },
+  ];
+  const v = variants[(opts.variant ?? 0) % variants.length];
+
+  if (course === "dessert") {
+    return recipeSchema.parse({
+      title: "Pommes fondantes cannelle-citron",
+      description: "Un dessert familial simple, fruité et parfumé, avec des pommes moelleuses et un jus légèrement caramélisé.",
+      cuisine_style: "familial",
+      course_type: "dessert",
+      difficulty: "facile",
+      prep_time: 25,
+      servings: opts.servings,
+      appliance: opts.appliance,
+      protein: "sans objet",
+      vegetables: ["pomme", "citron"],
+      calories: 210,
+      ingredients: [{ name: "pommes", qty: "800 g" }, { name: "sucre", qty: "50 g" }, { name: "citron", qty: "40 ml" }, { name: "cannelle", qty: "1 c. à café" }, { name: "huile de coco", qty: "20 g" }],
+      steps: [{ text: "Couper les pommes en quartiers réguliers et les mélanger avec le citron pour garder une texture fraîche.", timer_minutes: 5, appliance_settings: "Plan de travail : découpe en quartiers de 2 cm" }, { text: "Ajouter le sucre, la cannelle et l'huile de coco, puis mélanger jusqu'à enrobage brillant.", timer_minutes: 3, appliance_settings: "Bol : mélange manuel homogène" }, { text: "Cuire jusqu'à ce que les pommes deviennent tendres et légèrement dorées.", timer_minutes: 18, appliance_settings: applianceSetting(opts.appliance, 18, "180°C") }],
+      missing_ingredients: [],
+      ai_fallback: true,
+    });
+  }
+
+  if (course === "soupe" || course === "entree") {
+    return recipeSchema.parse({
+      title: course === "soupe" ? "Velouté doux de légumes au cumin" : "Salade tiède de légumes citronnés",
+      description: course === "soupe" ? "Une soupe douce, parfumée au cumin, avec une texture veloutée et réconfortante." : "Une entrée légère, fraîche et parfumée, avec des légumes tendres relevés au citron.",
+      cuisine_style: "méditerranéen",
+      course_type: course,
+      difficulty: "facile",
+      prep_time: 25,
+      servings: opts.servings,
+      appliance: opts.appliance,
+      protein: "végétarien",
+      vegetables: ["carotte", "courgette", "tomate"],
+      calories: course === "soupe" ? 180 : 220,
+      ingredients: [{ name: "carottes", qty: "400 g" }, { name: "courgettes", qty: "400 g" }, { name: "tomates", qty: "250 g" }, { name: "huile d'olive", qty: "25 ml" }, { name: "citron", qty: "30 ml" }, { name: "cumin", qty: "1 c. à café" }],
+      steps: [{ text: "Tailler les légumes en morceaux réguliers pour obtenir une cuisson homogène.", timer_minutes: 6, appliance_settings: "Plan de travail : découpe en dés de 2 cm" }, { text: "Faire revenir les légumes avec l'huile d'olive et le cumin jusqu'à ce qu'ils commencent à parfumer.", timer_minutes: 6, appliance_settings: applianceSetting(opts.appliance, 6) }, { text: course === "soupe" ? "Ajouter 700 ml d'eau, cuire jusqu'à tendreté puis mixer finement." : "Cuire juste jusqu'à tendreté puis assaisonner avec citron, sel et poivre.", timer_minutes: 15, appliance_settings: applianceSetting(opts.appliance, 15) }],
+      missing_ingredients: [],
+      ai_fallback: true,
+    });
+  }
+
+  return recipeSchema.parse({
+    title: opts.prompt.trim().length > 3 ? `${v.title} — inspiration ${opts.prompt.trim().slice(0, 40)}` : v.title,
+    description: `Une recette ${v.style} complète, familiale et savoureuse, pensée pour être cuite correctement avec ${opts.appliance}.`,
+    cuisine_style: v.style,
+    course_type: "plat",
+    difficulty: "facile",
+    prep_time: v.minutes,
+    servings: opts.servings,
+    appliance: opts.appliance,
+    protein: v.protein,
+    vegetables: v.vegetables,
+    calories: vegetarian ? 520 : 610,
+    ingredients: v.ingredients.map(([name, qty]) => ({ name, qty })),
+    steps: [
+      { text: "Préparer tous les ingrédients : couper les légumes en morceaux réguliers et sécher la protéine pour une meilleure coloration.", timer_minutes: 8, appliance_settings: "Plan de travail : découpe régulière, morceaux de 2 cm" },
+      { text: `Faire revenir la base avec les épices ${v.style} jusqu'à ce que les parfums se développent et que les légumes commencent à fondre.`, timer_minutes: 6, appliance_settings: applianceSetting(opts.appliance, 6) },
+      { text: "Ajouter la protéine principale et la saisir jusqu'à légère coloration, en remuant pour bien l'enrober de sauce.", timer_minutes: 7, appliance_settings: applianceSetting(opts.appliance, 7) },
+      { text: "Ajouter le liquide ou la sauce, couvrir et laisser cuire jusqu'à ce que la texture soit fondante et la sauce nappante.", timer_minutes: Math.max(12, v.minutes - 18), appliance_settings: applianceSetting(opts.appliance, Math.max(12, v.minutes - 18)) },
+      { text: "Cuire l'accompagnement séparément si nécessaire, puis ajuster sel, poivre et acidité avant de servir.", timer_minutes: 10, appliance_settings: "Casserole : eau frémissante feu moyen 6/9, cuisson selon indication du riz" },
+    ],
+    missing_ingredients: [],
+    ai_fallback: true,
+  });
+}
+
 function buildSystemPrompt(ctx: {
   appliance: string;
   restrictions: string[];

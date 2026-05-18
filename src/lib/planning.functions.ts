@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
 import { generateText } from "ai";
 import { violatesRestrictions, normalizeTitle, recipeSignature, isSimilarRecipe } from "./recipes.functions";
+import { APPLIANCE_GUIDE, APPLIANCES } from "./constants";
 
 
 function extractJsonObject(text: string) {
@@ -196,7 +197,15 @@ const singleSuggestionSchema: z.ZodType<{ recipe: FridgeRecipe }, z.ZodTypeDef, 
 
 export const suggestFromFridge = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input) =>
+    z
+      .object({
+        appliance: z.string().min(1).max(40).optional(),
+      })
+      .optional()
+      .parse(input ?? {}),
+  )
+  .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error("Cle Lovable AI manquante");
@@ -211,7 +220,14 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
     const items = (fridge.data ?? []).map((f) => `${f.name}${f.qty ? ` (${f.qty})` : ""}`);
     if (!items.length) throw new Error("Ajoutez d'abord des ingredients dans votre frigo");
     const restrictions = (prefs.data ?? []).map((p) => p.restriction);
-    const appliances = (appl.data ?? []).map((a) => a.appliance).join(", ") || "poele, four, casserole";
+    const userAppliances = (appl.data ?? []).map((a) => a.appliance as string);
+    const selected = data?.appliance?.trim();
+    const targetAppliances = selected ? [selected] : (userAppliances.length ? userAppliances : ["poele", "four", "casserole"]);
+    const appliances = targetAppliances.join(", ");
+    const applianceLabel = (id: string) => APPLIANCES.find((a) => a.id === id)?.label ?? id;
+    const guideBlock = targetAppliances
+      .map((id) => `• ${applianceLabel(id)} → ${APPLIANCE_GUIDE[id] ?? "Préciser mode, intensité (feu/°C/vitesse) et durée."}`)
+      .join("\n");
     const servings = profile.data?.household_size ?? 4;
     const existingTitles = (existing.data ?? []).map((r) => r.title);
     const existingNorm = new Set(existingTitles.map(normalizeTitle));
@@ -238,7 +254,11 @@ Regles ABSOLUES :
 - Accords logiques proteine + legumes + sauce + accompagnement. Rien de bancal.
 - Respecter ABSOLUMENT les exclusions : ${restrictions.join(", ") || "aucune"}.
 - Eviter ces titres deja presents dans la bibliotheque : ${existingTitles.slice(0, 30).join(" | ") || "aucun"}.
-- Appareils disponibles : ${appliances}. Pour CHAQUE etape, "appliance_settings" doit contenir le mode ET l'intensite precise (temperature °C, feu 1-9, duree).
+- Appareil(s) à utiliser EXCLUSIVEMENT : ${appliances}.${selected ? " NE PROPOSE AUCUNE étape sur un autre appareil." : ""}
+- Champ "appliance" de la recette = "${targetAppliances[0]}".
+- Pour CHAQUE étape, "appliance_settings" DOIT respecter STRICTEMENT le guide ci-dessous (mode exact + intensité réelle + durée). Ne JAMAIS inventer un mode qui n'existe pas sur l'appareil.
+GUIDE D'UTILISATION DES APPAREILS (à respecter à la lettre) :
+${guideBlock}
 - Portions : ${servings}.
 - Quantites en grammes ("200 g") ou millilitres ("150 ml") quand possible.
 - "missing_ingredients" = ce qu'il manque à acheter (le moins possible).

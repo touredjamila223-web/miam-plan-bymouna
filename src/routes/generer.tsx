@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { APPLIANCES } from "@/lib/constants";
+import { APPLIANCES, COURSE_TYPES } from "@/lib/constants";
 import { Sparkles, Clock, Users, Flame, Carrot, Drumstick, RefreshCw, Save, ChevronDown, ChevronUp, Link2, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { StrictDietBanner } from "@/components/strict-diet-banner";
@@ -21,6 +21,7 @@ export const Route = createFileRoute("/generer")({
 function Generer() {
   const { user } = useAuth();
   const [appliance, setAppliance] = useState("cookeo");
+  const [courseType, setCourseType] = useState<"plat" | "entree" | "soupe" | "dessert">("plat");
   const [hint, setHint] = useState("");
   const [recipes, setRecipes] = useState<any[]>([]);
   const [selected, setSelected] = useState<Record<number, boolean>>({});
@@ -81,7 +82,7 @@ function Generer() {
     setSelected({});
     setExpanded({});
     try {
-      const list = await genBatch({ data: { appliance, hint: hint || undefined } });
+      const list = await genBatch({ data: { appliance, hint: hint || undefined, course_type: courseType } });
       setRecipes(list);
     } catch (e: any) {
       toast.error(e.message ?? "Erreur de génération");
@@ -113,7 +114,16 @@ function Generer() {
       <StrictDietBanner />
 
       <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-3 gap-4">
+          <div>
+            <Label>Type de recette</Label>
+            <Select value={courseType} onValueChange={(v) => setCourseType(v as any)}>
+              <SelectTrigger><SelectValue/></SelectTrigger>
+              <SelectContent>
+                {COURSE_TYPES.map((c) => <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div>
             <Label>Appareil de cuisson</Label>
             <Select value={appliance} onValueChange={setAppliance}>

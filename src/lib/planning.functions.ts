@@ -1007,16 +1007,16 @@ export const generateWeekPlan = createServerFn({ method: "POST" })
 
     const result = await generateJson<{ picks: { day: number; slot: "matin" | "midi" | "soir"; recipe_id: string }[] }>({
       model,
-      system: `Tu remplis un planning hebdomadaire de repas pour ${servings} personnes.
+      system: `Tu remplis un planning hebdomadaire pour ${servings} personnes : UNIQUEMENT le dîner (slot "soir") pour chacun des 7 jours.
 Règles ABSOLUES :
 - Ne choisis QUE parmi les recipe_id listés ci-dessous (copie l'UUID exact).
 - Respecte ABSOLUMENT ces restrictions : ${restrictions.join(", ") || "aucune"}.
-- Équilibre la semaine : varie les protéines (jamais 2 fois la même protéine 2 jours de suite), varie les styles culinaires, alterne plats rapides (<25 min) en semaine et plats plus longs le week-end (samedi=jour 5, dimanche=jour 6).
+- Équilibre la semaine : varie les protéines (jamais 2 fois la même protéine 2 jours de suite), varie les styles culinaires, alterne dîners rapides (<25 min) en semaine et plats plus longs le week-end (samedi=jour 5, dimanche=jour 6).
 - Évite les répétitions : une recette max 2 fois dans la semaine, jamais le même jour.
 - Évite les recettes récemment cuisinées (ids: ${[...recentIds].join(", ") || "aucune"}).
 - ${tasteHint || "Pas d'historique de goût encore."}
-- Slots à remplir : ${data.slots.join(", ")} pour les 7 jours (jour 0 = lundi, jour 6 = dimanche). Total = 7 × ${data.slots.length} créneaux.
-Réponds en JSON strict : { "picks": [ { "day": 0-6, "slot": "midi"|"soir"|"matin", "recipe_id": "<uuid>" }, ... ] }`,
+- Slot UNIQUE : "soir", pour chacun des 7 jours (jour 0 = lundi, jour 6 = dimanche). Total = 7 dîners.
+Réponds en JSON strict : { "picks": [ { "day": 0-6, "slot": "soir", "recipe_id": "<uuid>" }, ... ] }`,
       prompt: `Recettes disponibles :\n${recipeList}\n\nGénère le planning complet.`,
       schema: weekPlanSchema,
       maxOutputTokens: 4000,

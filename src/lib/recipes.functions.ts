@@ -602,19 +602,26 @@ export const generateRecipePublic = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error("Clé Lovable AI manquante");
-    const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
-    const recipe = await generateJson({
-      model,
-      system: buildSystemPrompt({
-        appliance: data.appliance,
-        restrictions: data.restrictions ?? [],
-        servings: data.servings ?? 4,
-        family_name: null,
-      }),
-      prompt: `Génère une recette complète pour : ${data.prompt}`,
-      schema: recipeSchema,
-    });
+    const recipe = await (async () => {
+      try {
+        const gateway = createLovableAiGatewayProvider(apiKey);
+        const model = gateway("google/gemini-2.5-flash");
+        return await generateJson({
+          model,
+          system: buildSystemPrompt({
+            appliance: data.appliance,
+            restrictions: data.restrictions ?? [],
+            servings: data.servings ?? 4,
+            family_name: null,
+          }),
+          prompt: `Génère une recette complète pour : ${data.prompt}`,
+          schema: recipeSchema,
+        });
+      } catch (error) {
+        if (isAiPaymentError(error)) return fallbackRecipe({ prompt: data.prompt, appliance: data.appliance, servings: data.servings ?? 4, restrictions: data.restrictions ?? [] });
+        throw error;
+      }
+    })();
     return { ...recipe, appliance: data.appliance };
   });
 
@@ -660,21 +667,30 @@ async function generateBatchOnce(opts: {
   hint?: string;
   course_type?: "plat" | "entree" | "soupe" | "dessert";
 }) {
-  const gateway = createLovableAiGatewayProvider(opts.apiKey);
-  const model = gateway("google/gemini-2.5-flash");
-  const object = await generateJson({
-    model,
-    system: buildSystemPrompt({
-      appliance: opts.appliance,
-      restrictions: opts.restrictions,
-      servings: opts.servings,
-      family_name: opts.family_name,
-      course_type: opts.course_type,
-    }),
-    prompt: buildBatchPrompt(opts.exclude, opts.hint, opts.course_type),
-    schema: batchSchema,
-    maxOutputTokens: 9000,
-  });
+  const object = await (async () => {
+    try {
+      const gateway = createLovableAiGatewayProvider(opts.apiKey);
+      const model = gateway("google/gemini-2.5-flash");
+      return await generateJson({
+        model,
+        system: buildSystemPrompt({
+          appliance: opts.appliance,
+          restrictions: opts.restrictions,
+          servings: opts.servings,
+          family_name: opts.family_name,
+          course_type: opts.course_type,
+        }),
+        prompt: buildBatchPrompt(opts.exclude, opts.hint, opts.course_type),
+        schema: batchSchema,
+        maxOutputTokens: 9000,
+      });
+    } catch (error) {
+      if (isAiPaymentError(error)) {
+        return { recipes: [0, 1, 2].map((variant) => fallbackRecipe({ prompt: opts.hint ?? "recette familiale", appliance: opts.appliance, servings: opts.servings, restrictions: opts.restrictions, course_type: opts.course_type, variant })) };
+      }
+      throw error;
+    }
+  })();
   if ((opts.course_type ?? "plat") === "plat") {
     const counts: Record<string, number> = {};
     const kept: typeof object.recipes = [];

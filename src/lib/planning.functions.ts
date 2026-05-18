@@ -1011,7 +1011,16 @@ export const generateWeekPlan = createServerFn({ method: "POST" })
 Règles ABSOLUES :
 - Ne choisis QUE parmi les recipe_id listés ci-dessous (copie l'UUID exact).
 - Respecte ABSOLUMENT ces restrictions : ${restrictions.join(", ") || "aucune"}.
-- Équilibre la semaine : varie les protéines (jamais 2 fois la même protéine 2 jours de suite), varie les styles culinaires, alterne dîners rapides (<25 min) en semaine et plats plus longs le week-end (samedi=jour 5, dimanche=jour 6).
+- Équilibre des protéines sur les 7 dîners (règles strictes, basées sur le champ "protéine" de chaque recette) :
+  • MAXIMUM 2 repas à base de poulet
+  • MAXIMUM 2 repas à base de bœuf
+  • AU MOINS 1 repas à base d'agneau
+  • AU MOINS 1 repas à base de dinde OU de veau
+  • AU MOINS 1 repas intégrant une légumineuse (lentilles, pois chiches, haricots, fèves…) comme accompagnement ou ingrédient principal (regarde aussi les légumes/ingrédients listés)
+  • La MÊME protéine ne peut JAMAIS apparaître deux jours consécutifs
+  • Aucune protéine n'est imposée à un jour fixe : répartis librement tant que les contraintes ci-dessus sont respectées
+  Si la bibliothèque manque d'une protéine requise (ex: pas d'agneau), choisis la recette la plus proche et n'enfreins jamais les "MAXIMUM".
+- Varie aussi les styles culinaires, et alterne dîners rapides (<25 min) en semaine et plats plus longs le week-end (samedi=jour 5, dimanche=jour 6).
 - Évite les répétitions : une recette max 2 fois dans la semaine, jamais le même jour.
 - Évite les recettes récemment cuisinées (ids: ${[...recentIds].join(", ") || "aucune"}).
 - ${tasteHint || "Pas d'historique de goût encore."}

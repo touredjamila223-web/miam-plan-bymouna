@@ -520,14 +520,20 @@ const batchInput = z.object({
   restrictions: z.array(z.string()).max(20).optional(),
   exclude: z.array(z.string()).max(40).optional(),
   hint: z.string().max(300).optional(),
+  course_type: z.enum(["plat", "entree", "soupe", "dessert"]).optional(),
 });
 
-function buildBatchPrompt(exclude: string[], hint?: string) {
-  return `Propose 3 recettes VARIÉES et savoureuses pour le repas familial.
+function buildBatchPrompt(exclude: string[], hint?: string, courseType: "plat" | "entree" | "soupe" | "dessert" = "plat") {
+  const courseLabel = { plat: "plats principaux", entree: "entrées", soupe: "soupes ou veloutés", dessert: "desserts" }[courseType];
+  const platRules = courseType === "plat"
+    ? `- PROTÉINES : pas plus de 2 recettes avec la même protéine principale parmi les 3. Varie au maximum.`
+    : `- Varie les ingrédients vedettes : pas deux recettes construites sur le même ingrédient principal.`;
+  return `Propose 3 ${courseLabel} VARIÉS et savoureux pour la famille.
 Contraintes :
 - Chaque recette doit avoir une identité culinaire claire et différente des autres autant que possible (varie les styles : ex. un français, un asiatique, un méditerranéen).
-- PROTÉINES : pas plus de 2 recettes avec la même protéine principale parmi les 3. Varie au maximum.
-- Chaque recette doit être cohérente : protéine + légumes + sauce + épices + accompagnement forment un ensemble harmonieux.
+${platRules}
+- Chaque recette doit être cohérente et bien construite pour son type (${courseLabel}).
+- "course_type" DOIT valoir "${courseType}" pour les 3 recettes.
 - Évite ces titres déjà vus : ${exclude.length ? exclude.join(", ") : "aucun"}.
 ${hint ? `- Préférence utilisateur : ${hint}` : ""}
 Réponds avec un objet { recipes: [3 recettes complètes] }.`;
@@ -541,6 +547,7 @@ async function generateBatchOnce(opts: {
   family_name: string | null;
   exclude: string[];
   hint?: string;
+  course_type?: "plat" | "entree" | "soupe" | "dessert";
 }) {
   const gateway = createLovableAiGatewayProvider(opts.apiKey);
   const model = gateway("google/gemini-2.5-flash");
@@ -551,20 +558,23 @@ async function generateBatchOnce(opts: {
       restrictions: opts.restrictions,
       servings: opts.servings,
       family_name: opts.family_name,
+      course_type: opts.course_type,
     }),
-    prompt: buildBatchPrompt(opts.exclude, opts.hint),
+    prompt: buildBatchPrompt(opts.exclude, opts.hint, opts.course_type),
     schema: batchSchema,
     maxOutputTokens: 9000,
   });
-  // Enforce max 2 same protein (post-check, deterministic trim)
-  const counts: Record<string, number> = {};
-  const kept: typeof object.recipes = [];
-  for (const r of object.recipes) {
-    const p = (r.protein ?? "").toLowerCase().trim();
-    counts[p] = (counts[p] ?? 0) + 1;
-    if (counts[p] <= 2) kept.push(r);
+  if ((opts.course_type ?? "plat") === "plat") {
+    const counts: Record<string, number> = {};
+    const kept: typeof object.recipes = [];
+    for (const r of object.recipes) {
+      const p = (r.protein ?? "").toLowerCase().trim();
+      counts[p] = (counts[p] ?? 0) + 1;
+      if (counts[p] <= 2) kept.push(r);
+    }
+    return kept;
   }
-  return kept;
+  return object.recipes;
 }
 
 export const generateRecipeBatch = createServerFn({ method: "POST" })

@@ -616,22 +616,28 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
     const tasteHint = buildTasteHint(cooked ?? []);
     const combinedHint = [data.hint, tasteHint].filter(Boolean).join(" — ");
 
-    const kept = await generateBatchOnce({
-      apiKey,
-      appliance: data.appliance,
-      restrictions,
-      servings,
-      family_name,
-      exclude,
-      hint: combinedHint || undefined,
-      course_type: data.course_type,
-    });
-    const valid = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0 && !isDuplicate(r));
-    // Filtre intra-lot final : enlève les variantes proches entre elles
-    const unique: typeof valid = [];
-    for (const r of valid) {
-      if (unique.some((k) => isSimilarRecipe(k, r))) continue;
-      unique.push(r);
+    const unique: any[] = [];
+    let currentExclude = [...exclude];
+    for (let attempt = 0; attempt < 3 && unique.length < 3; attempt += 1) {
+      const kept = await generateBatchOnce({
+        apiKey,
+        appliance: data.appliance,
+        restrictions,
+        servings,
+        family_name,
+        exclude: currentExclude,
+        hint: combinedHint || undefined,
+        course_type: data.course_type,
+      });
+      const valid = kept.filter(
+        (r) => violatesRestrictions(r, restrictions).length === 0 && !isDuplicate(r),
+      );
+      for (const r of valid) {
+        if (unique.length >= 3) break;
+        if (unique.some((k) => isSimilarRecipe(k, r))) continue;
+        unique.push(r);
+        currentExclude.push(r.title);
+      }
     }
     return unique.slice(0, 3);
   });

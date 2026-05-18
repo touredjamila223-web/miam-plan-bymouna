@@ -1027,7 +1027,7 @@ Réponds en JSON strict : { "picks": [ { "day": 0-6, "slot": "midi"|"soir"|"mati
     const seen = new Set<string>();
     for (const p of result.picks) {
       if (!validIds.has(p.recipe_id)) continue;
-      if (!data.slots.includes(p.slot)) continue;
+      if (!(data.slots as readonly string[]).includes(p.slot)) continue;
       const d = new Date(start);
       d.setDate(d.getDate() + p.day);
       const dateStr = d.toISOString().slice(0, 10);

@@ -850,9 +850,9 @@ FORMAT STRICT : retourne uniquement {"items":[{"item":"...","qty":"...","categor
 function normalizeBatchOutput(raw: unknown) {
   if (!raw || typeof raw !== "object") return raw;
   const data = raw as Record<string, any>;
-  const mealsSource = data.meals ?? data.repas_de_la_semaine ?? data.repas ?? [];
   const basesSource = data.bases ?? data.preparations_de_base ?? data.préparations_de_base ?? data.preparations ?? [];
   const stepsSource = data.parallel_steps ?? data.etapes_paralleles ?? data["étapes_parallèles"] ?? data.planning ?? data.deroule ?? [];
+  const finishesSource = data.meal_finishes ?? data.finitions ?? data.finitions_repas ?? [];
   return {
     title: String(data.title ?? data.titre ?? "Session batch cooking de la semaine"),
     total_time: Math.max(60, Math.round(Number(data.total_time ?? data.temps_total ?? data.duree_totale ?? data.durée_totale ?? 150)) || 150),
@@ -868,19 +868,18 @@ function normalizeBatchOutput(raw: unknown) {
     parallel_steps: Array.isArray(stepsSource)
       ? stepsSource.map((s: any, index: number) => ({
           time_block: String(s?.time_block ?? s?.creneau ?? s?.créneau ?? s?.bloc_temps ?? `${index * 30}-${index * 30 + 30} min`),
+          duration_minutes: Math.max(5, Math.round(Number(s?.duration_minutes ?? s?.duree ?? s?.durée ?? 30)) || 30),
           tasks: Array.isArray(s?.tasks ?? s?.taches ?? s?.tâches)
             ? (s.tasks ?? s.taches ?? s.tâches).map(String)
             : [String(s?.task ?? s?.description ?? s?.texte ?? "Préparation batch")],
         }))
       : [],
-    meals: Array.isArray(mealsSource)
-      ? mealsSource.map((m: any) => ({
-          title: String(m?.title ?? m?.nom_repas ?? m?.name ?? m?.nom ?? "Repas préparé"),
-          day: String(m?.day ?? m?.jour ?? "Semaine"),
-          slot: String(m?.slot ?? m?.moment ?? "soir").toLowerCase().includes("midi") ? "midi" : "soir",
+    meal_finishes: Array.isArray(finishesSource)
+      ? finishesSource.map((m: any) => ({
+          recipe_id: String(m?.recipe_id ?? m?.id ?? ""),
           finish_steps: Array.isArray(m?.finish_steps ?? m?.etapes_finition ?? m?.étapes_finition)
             ? (m.finish_steps ?? m.etapes_finition ?? m.étapes_finition).map(String)
-            : [String(m?.finition_rapide ?? m?.finish ?? "Réchauffer et assembler les bases préparées.")],
+            : [String(m?.finition_rapide ?? m?.finish ?? "Réchauffer et assembler.")],
         }))
       : [],
   };
@@ -890,8 +889,8 @@ const batchBaseSchema = z.object({
   title: z.string(),
   total_time: z.number().int().min(60).max(240),
   bases: z.array(z.object({ name: z.string().min(1), qty: z.string(), use_in: z.array(z.string()) })).min(1),
-  parallel_steps: z.array(z.object({ time_block: z.string(), tasks: z.array(z.string()).min(1) })).min(1),
-  meals: z.array(z.object({ title: z.string().min(1), day: z.string(), slot: z.enum(["midi", "soir"]), finish_steps: z.array(z.string()).min(1) })).min(3),
+  parallel_steps: z.array(z.object({ time_block: z.string(), duration_minutes: z.number().int().min(5).max(120), tasks: z.array(z.string()).min(1) })).min(1),
+  meal_finishes: z.array(z.object({ recipe_id: z.string().min(1), finish_steps: z.array(z.string()).min(1) })).min(1),
 });
 const batchSchema: z.ZodType<z.infer<typeof batchBaseSchema>, z.ZodTypeDef, unknown> = z.preprocess(
   normalizeBatchOutput,
@@ -900,10 +899,26 @@ const batchSchema: z.ZodType<z.infer<typeof batchBaseSchema>, z.ZodTypeDef, unkn
 
 export const generateBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input) => z.object({ week_start: z.string() }).parse(input))
+  .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error("Cle Lovable AI manquante");
+
+    // Load week plan + recipes
+    const start = new Date(data.week_start);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    const { data: plan } = await supabase
+      .from("meal_plan")
+      .select("id, date, slot, recipe_id, recipes(id, title, ingredients, protein, cuisine_style)")
+      .eq("user_id", userId)
+      .gte("date", data.week_start)
+      .lt("date", end.toISOString().slice(0, 10))
+      .order("date");
+    const meals = (plan ?? []).filter((p: any) => p.recipes);
+    if (meals.length < 3) throw new Error("Ajoute au moins 3 repas à ton planning de la semaine avant de générer la session batch.");
+
     const [prefs, appl, profile] = await Promise.all([
       supabase.from("dietary_preferences").select("restriction").eq("user_id", userId),
       supabase.from("appliances").select("appliance").eq("user_id", userId),
@@ -913,22 +928,47 @@ export const generateBatch = createServerFn({ method: "POST" })
     const appliances = (appl.data ?? []).map((a) => a.appliance).join(", ") || "poele, four, cookeo";
     const servings = profile.data?.household_size ?? 4;
 
+    const FR_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+    const mealsBrief = meals.map((m: any) => {
+      const d = new Date(m.date);
+      const dayIdx = (d.getDay() + 6) % 7;
+      const ings = Array.isArray(m.recipes.ingredients)
+        ? m.recipes.ingredients.slice(0, 8).map((i: any) => `${i.qty ?? ""} ${i.name ?? ""}`.trim()).join(", ")
+        : "";
+      return `- id=${m.recipes.id} | ${FR_DAYS[dayIdx]} ${m.slot} | "${m.recipes.title}" | protéine: ${m.recipes.protein ?? "n/a"} | ingrédients: ${ings}`;
+    }).join("\n");
+
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-2.5-flash");
     const object = await generateJson({
       model,
-      system: `Tu concois une session de batch cooking dominicale de 2-3h pour preparer 5 repas de semaine pour ${servings} personnes.
-Regles :
-- Cuisiner des BASES (legumes rotis, cereales, proteines, sauces) REUTILISABLES dans plusieurs repas
-- Optimiser : indiquer des etapes PARALLELES par bloc de temps en utilisant plusieurs appareils en meme temps : ${appliances}
-- Chaque repas final doit avoir une identite culinaire (francais/italien/oriental/asiatique/mediterraneen) coherente et juste 5-10 min de finition en semaine
-- Respecter ABSOLUMENT : ${restrictions.join(", ") || "aucune restriction"}
-FORMAT STRICT : retourne uniquement {"title":"...","total_time":150,"bases":[{"name":"...","qty":"...","use_in":["..."]}],"parallel_steps":[{"time_block":"0-30 min","tasks":["..."]}],"meals":[{"title":"...","day":"Lundi","slot":"soir","finish_steps":["..."]}]}. N'utilise jamais les clés françaises "titre", "repas_de_la_semaine", "etapes_paralleles".`,
-      prompt: `Genere une session batch cooking complete pour la semaine.`,
+      system: `Tu conçois une session de batch cooking dominicale (2-3h) pour ${servings} personnes, basée EXACTEMENT sur les repas déjà planifiés ci-dessous. N'invente AUCUN nouveau repas.
+Règles :
+- Identifie des BASES (légumes rôtis, céréales cuites, protéines pré-cuites/marinées, sauces) MUTUALISÉES entre plusieurs repas planifiés
+- Organise des ÉTAPES PARALLÈLES par bloc de temps (avec duration_minutes) en utilisant : ${appliances}
+- Pour CHAQUE repas listé, fournis 2-5 étapes de FINITION rapide (5-10 min) le jour J, en référençant la base préparée
+- Respecte : ${restrictions.join(", ") || "aucune restriction"}
+FORMAT JSON STRICT : {"title":"...","total_time":150,"bases":[{"name":"...","qty":"...","use_in":["titre du repas"]}],"parallel_steps":[{"time_block":"0-30 min","duration_minutes":30,"tasks":["..."]}],"meal_finishes":[{"recipe_id":"<id exact>","finish_steps":["..."]}]}. Le champ recipe_id DOIT être l'id exact fourni dans la liste.`,
+      prompt: `Repas planifiés cette semaine :\n${mealsBrief}\n\nGénère la session batch cooking pour ces repas précis.`,
       schema: batchSchema,
       maxOutputTokens: 7000,
     });
-    return object;
+
+    // Attach meta about meals for client display
+    return {
+      ...object,
+      meals: meals.map((m: any) => {
+        const d = new Date(m.date);
+        const dayIdx = (d.getDay() + 6) % 7;
+        return {
+          recipe_id: m.recipes.id,
+          title: m.recipes.title,
+          day: FR_DAYS[dayIdx],
+          date: m.date,
+          slot: m.slot,
+        };
+      }),
+    };
   });
 
 // ============== WEEK PLAN AI ==============

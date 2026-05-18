@@ -1120,25 +1120,8 @@ function buildTasteHint(history: any[]): string {
 
 // ============== SAVE BATCH SESSION ==============
 
-const DAY_INDEX: Record<string, number> = {
-  lundi: 0, mardi: 1, mercredi: 2, jeudi: 3, vendredi: 4, samedi: 5, dimanche: 6,
-};
-
 const batchActionSchema = z.object({
-  batch: z.object({
-    title: z.string().optional(),
-    bases: z.array(z.object({ name: z.string(), qty: z.string().optional(), use_in: z.array(z.string()).optional() })).default([]),
-    parallel_steps: z.array(z.object({ time_block: z.string().optional(), tasks: z.array(z.string()).default([]) })).default([]),
-    meals: z.array(z.object({
-      title: z.string(),
-      day: z.string(),
-      slot: z.enum(["midi", "soir"]).default("soir"),
-      finish_steps: z.array(z.string()).default([]),
-    })).default([]),
-  }),
-  week_start: z.string(),
-  add_to_shopping: z.boolean().default(true),
-  add_to_plan: z.boolean().default(true),
+  bases: z.array(z.object({ name: z.string(), qty: z.string().optional() })).default([]),
 });
 
 export const saveBatchSession = createServerFn({ method: "POST" })
@@ -1146,95 +1129,15 @@ export const saveBatchSession = createServerFn({ method: "POST" })
   .inputValidator((input) => batchActionSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { batch, week_start, add_to_shopping, add_to_plan } = data;
-
-    const { data: profile } = await supabase
-      .from("profiles").select("household_size").eq("id", userId).maybeSingle();
-    const servings = profile?.household_size ?? 4;
-
-    // 1) Create one recipe per meal, with ingredients derived from bases used in that meal
-    const prepStepsAll = batch.parallel_steps.flatMap((s) => s.tasks);
-    const createdRecipes: { meal_title: string; recipe_id: string; day: string; slot: "midi" | "soir" }[] = [];
-    for (const meal of batch.meals) {
-      const linkedBases = batch.bases.filter((b) =>
-        (b.use_in ?? []).some((u) => u.toLowerCase().includes(meal.title.toLowerCase()) || meal.title.toLowerCase().includes(u.toLowerCase())),
-      );
-      const ingredients = (linkedBases.length ? linkedBases : batch.bases).map((b) => ({
-        name: b.name,
-        qty: b.qty ?? "à ajuster",
-      }));
-      const steps = [
-        ...prepStepsAll.slice(0, 3).map((t) => ({ text: `Préparation batch : ${t}`, timer_minutes: 0 })),
-        ...meal.finish_steps.map((t) => ({ text: t, timer_minutes: 0 })),
-      ];
-      const { data: row, error } = await supabase
-        .from("recipes")
-        .insert({
-          owner_id: userId,
-          title: meal.title,
-          description: `Repas issu de la session "${batch.title ?? "Batch cooking"}"`,
-          cuisine_style: "batch",
-          difficulty: "facile",
-          prep_time: 10,
-          servings,
-          appliance: "réchauffe",
-          protein: "varié",
-          vegetables: [],
-          calories: 500,
-          ingredients,
-          steps,
-          source: "batch",
-        })
-        .select("id")
-        .single();
-      if (error) throw new Error(error.message);
-      createdRecipes.push({ meal_title: meal.title, recipe_id: row.id, day: meal.day, slot: meal.slot });
-    }
-
-    // 2) Add bases to shopping list
-    let shoppingInserted = 0;
-    if (add_to_shopping && batch.bases.length) {
-      const rows = batch.bases.map((b) => ({
-        user_id: userId,
-        item: b.name,
-        qty: b.qty ?? "",
-        category: "Autres",
-        source: "batch",
-      }));
-      const { error } = await supabase.from("shopping_list").insert(rows);
-      if (!error) shoppingInserted = rows.length;
-    }
-
-    // 3) Add meals to meal_plan
-    let planInserted = 0;
-    if (add_to_plan && createdRecipes.length) {
-      const start = new Date(week_start);
-      const inserts: { user_id: string; date: string; slot: string; recipe_id: string; servings: number }[] = [];
-      const seen = new Set<string>();
-      for (const r of createdRecipes) {
-        const idx = DAY_INDEX[r.day.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")];
-        if (idx == null) continue;
-        const d = new Date(start);
-        d.setDate(d.getDate() + idx);
-        const dateStr = d.toISOString().slice(0, 10);
-        const key = `${dateStr}|${r.slot}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        inserts.push({ user_id: userId, date: dateStr, slot: r.slot, recipe_id: r.recipe_id, servings });
-      }
-      if (inserts.length) {
-        // Remove existing plan entries on those date+slot combos
-        for (const i of inserts) {
-          await supabase.from("meal_plan").delete().eq("user_id", userId).eq("date", i.date).eq("slot", i.slot);
-        }
-        const { error } = await supabase.from("meal_plan").insert(inserts);
-        if (!error) planInserted = inserts.length;
-      }
-    }
-
-    return {
-      recipes_created: createdRecipes.length,
-      shopping_inserted: shoppingInserted,
-      plan_inserted: planInserted,
-    };
+    if (!data.bases.length) return { shopping_inserted: 0 };
+    const rows = data.bases.map((b) => ({
+      user_id: userId,
+      item: b.name,
+      qty: b.qty ?? "",
+      category: "Batch cooking",
+      source: "batch",
+    }));
+    const { error } = await supabase.from("shopping_list").insert(rows);
+    if (error) throw new Error(error.message);
+    return { shopping_inserted: rows.length };
   });

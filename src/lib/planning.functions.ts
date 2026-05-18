@@ -1020,11 +1020,13 @@ export const generateBatch = createServerFn({ method: "POST" })
       return `- id=${m.recipes.id} | ${FR_DAYS[dayIdx]} ${m.slot} | "${m.recipes.title}" | appareil: ${m.recipes.appliance ?? "non précisé"} | cuisson: ${m.recipes.prep_time ?? "?"} min | protéine: ${m.recipes.protein ?? "n/a"} | ingrédients: ${ings} | étapes-clés: ${firstSteps}`;
     }).join("\n");
 
-    const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
-    const object = await generateJson({
-      model,
-      system: `Tu organises une session UNIQUE de batch cooking (samedi ou dimanche) pour ${servings} personnes. L'utilisateur cuisine INTÉGRALEMENT tous les plats de la semaine en une seule session, les portionne et les met au frigo. Chaque soir il n'aura qu'à RÉCHAUFFER.
+    const object = await (async () => {
+      try {
+        const gateway = createLovableAiGatewayProvider(apiKey);
+        const model = gateway("google/gemini-2.5-flash");
+        return await generateJson({
+          model,
+          system: `Tu organises une session UNIQUE de batch cooking (samedi ou dimanche) pour ${servings} personnes. L'utilisateur cuisine INTÉGRALEMENT tous les plats de la semaine en une seule session, les portionne et les met au frigo. Chaque soir il n'aura qu'à RÉCHAUFFER.
 
 Règles ABSOLUES :
 - Chaque plat planifié doit être ENTIÈREMENT cuisiné pendant la session (pas de "base" à finir plus tard, pas de finition jour J).
@@ -1037,10 +1039,15 @@ Règles ABSOLUES :
 - Respecte les restrictions alimentaires : ${restrictions.join(", ") || "aucune"}.
 
 FORMAT JSON STRICT : {"title":"...","total_time":150,"cooked_meals":[{"recipe_id":"<id exact>","title":"...","appliance":"cookeo","program":"Mijotage","temperature":"","duration_minutes":90,"start_at_minute":0,"notes":""}],"parallel_steps":[{"time_block":"0-15 min","duration_minutes":15,"tasks":["..."]}],"final_checklist":[{"recipe_id":"<id exact>","label":"Bœuf bourguignon : ${servings} portions au frigo"}]}. Le champ recipe_id DOIT être un id EXACT de la liste fournie. Chaque plat planifié DOIT apparaître dans cooked_meals ET dans final_checklist.`,
-      prompt: `Repas planifiés cette semaine :\n${mealsBrief}\n\nGénère la session batch cooking pour ces repas précis.`,
-      schema: batchSchema,
-      maxOutputTokens: 7000,
-    });
+          prompt: `Repas planifiés cette semaine :\n${mealsBrief}\n\nGénère la session batch cooking pour ces repas précis.`,
+          schema: batchSchema,
+          maxOutputTokens: 7000,
+        });
+      } catch (error) {
+        if (isAiPaymentError(error)) return buildFallbackBatchSession(meals, servings);
+        throw error;
+      }
+    })();
 
     // Attach meta about meals for client display
     return {

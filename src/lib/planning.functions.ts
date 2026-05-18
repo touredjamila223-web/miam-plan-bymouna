@@ -488,39 +488,125 @@ function normalizeShoppingOutput(raw: unknown) {
 }
 
 const categoryMap: Record<string, string> = {
-  "fruits et légumes": "Fruits & legumes",
-  "fruits et legumes": "Fruits & legumes",
-  "fruits & légumes": "Fruits & legumes",
-  "fruits & legumes": "Fruits & legumes",
-  legumes: "Fruits & legumes",
-  légumes: "Fruits & legumes",
-  boucherie: "Viandes & poissons",
-  poissonnerie: "Viandes & poissons",
-  "viandes et poissons": "Viandes & poissons",
-  "viandes & poissons": "Viandes & poissons",
-  crémerie: "Cremerie",
-  cremerie: "Cremerie",
-  "produits laitiers": "Cremerie",
-  frais: "Cremerie",
-  epicerie: "Epicerie",
-  épicerie: "Epicerie",
+  fruits: "Fruits",
+  legumes: "Legumes",
+  "fruits et legumes": "Legumes",
+  "fruits & legumes": "Legumes",
+  primeur: "Legumes",
+  boucherie: "Viandes",
+  viandes: "Viandes",
+  volaille: "Viandes",
+  poissonnerie: "Poissons & fruits de mer",
+  poissons: "Poissons & fruits de mer",
+  "fruits de mer": "Poissons & fruits de mer",
+  charcuterie: "Charcuterie",
+  cremerie: "Cremerie & oeufs",
+  "produits laitiers": "Cremerie & oeufs",
+  oeufs: "Cremerie & oeufs",
+  fromages: "Fromages",
+  fromage: "Fromages",
+  "pates et riz": "Pates, riz & feculents",
+  feculents: "Pates, riz & feculents",
+  conserves: "Conserves",
+  epicerie: "Epicerie salee",
+  "epicerie salee": "Epicerie salee",
+  "epicerie sucree": "Epicerie sucree",
+  sucre: "Epicerie sucree",
+  patisserie: "Epicerie sucree",
+  sauces: "Sauces & condiments",
+  condiments: "Sauces & condiments",
+  epices: "Herbes & epices",
+  "herbes et epices": "Herbes & epices",
+  huiles: "Huiles & vinaigres",
+  "huiles et vinaigres": "Huiles & vinaigres",
   boulangerie: "Boulangerie",
+  pain: "Boulangerie",
   surgeles: "Surgeles",
-  surgelés: "Surgeles",
   boissons: "Boissons",
+  aperitif: "Aperitif",
+  hygiene: "Hygiene & entretien",
+  entretien: "Hygiene & entretien",
 };
+
+const CATEGORIES = [
+  "Fruits",
+  "Legumes",
+  "Viandes",
+  "Poissons & fruits de mer",
+  "Charcuterie",
+  "Cremerie & oeufs",
+  "Fromages",
+  "Pates, riz & feculents",
+  "Conserves",
+  "Sauces & condiments",
+  "Herbes & epices",
+  "Huiles & vinaigres",
+  "Epicerie salee",
+  "Epicerie sucree",
+  "Boulangerie",
+  "Surgeles",
+  "Boissons",
+  "Aperitif",
+  "Hygiene & entretien",
+  "Autres",
+] as const;
+
+const itemRules: Array<[RegExp, (typeof CATEGORIES)[number]]> = [
+  [/\b(pomme|poire|banane|orange|citron|clementine|mandarine|fraise|framboise|myrtille|cerise|raisin|peche|abricot|prune|ananas|mangue|kiwi|melon|pasteque|figue|grenade|avocat|datte|noix de coco)\b/, "Fruits"],
+  [/\b(salade|laitue|roquette|epinard|mache|cresson|chou|brocoli|chou-fleur|carotte|navet|radis|betterave|panais|celeri|fenouil|poireau|oignon|echalote|ail|gingembre|patate|pomme de terre|courgette|aubergine|poivron|piment|tomate|concombre|courge|potiron|butternut|champignon|haricot vert|petit pois|mais|artichaut|asperge|endive|persil frais|coriandre fraiche|basilic frais|menthe fraiche|ciboulette)\b/, "Legumes"],
+  [/\b(poulet|dinde|boeuf|veau|porc|agneau|canard|lapin|steak|escalope|cuisse|filet|hachis|viande hachee|saucisse(?! sec)|merguez|brochette)\b/, "Viandes"],
+  [/\b(saumon|thon|cabillaud|colin|merlu|lieu|sardine|maquereau|truite|dorade|bar|lotte|crevette|gambas|moule|huitre|coquille|calamar|poulpe|seiche|surimi|poisson)\b/, "Poissons & fruits de mer"],
+  [/\b(jambon|bacon|lardon|chorizo|saucisson|rillette|pate|terrine|saucisse seche|coppa)\b/, "Charcuterie"],
+  [/\b(lait|creme|beurre|yaourt|fromage blanc|faisselle|skyr|petit suisse|oeuf|oeufs|margarine)\b/, "Cremerie & oeufs"],
+  [/\b(gruyere|emmental|comte|parmesan|mozzarella|ricotta|feta|chevre|camembert|brie|roquefort|bleu|raclette|reblochon|tomme|cheddar|burrata|mascarpone)\b/, "Fromages"],
+  [/\b(pates|spaghetti|penne|tagliatelle|fusilli|macaroni|coquillette|lasagne|riz|quinoa|boulgour|semoule|couscous|polenta|lentille|pois chiche|haricot sec|haricot rouge|haricot blanc)\b/, "Pates, riz & feculents"],
+  [/\b(conserve|boite|pulpe de tomate|tomate pelee|concentre de tomate|mais en boite|thon en boite|sardine en boite|haricot en boite)\b/, "Conserves"],
+  [/\b(ketchup|mayonnaise|moutarde|sauce soja|sauce|nuoc-mam|tabasco|sriracha|pesto|tapenade|cornichon|olive|cape?res|vinaigrette)\b/, "Sauces & condiments"],
+  [/\b(sel|poivre|paprika|curry|curcuma|cumin|cannelle|muscade|origan|thym|laurier|romarin|herbes de provence|piment d'espelette|safran|gingembre moulu|ail en poudre|bouillon|cube)\b/, "Herbes & epices"],
+  [/\b(huile|vinaigre)\b/, "Huiles & vinaigres"],
+  [/\b(farine|levure|maizena|fecule|chapelure|biscotte|cereales|muesli|granola|flocons d'avoine|miel|confiture)\b/, "Epicerie salee"],
+  [/\b(sucre|chocolat|cacao|vanille|biscuit|gateau|pate a tartiner|nutella|bonbon|caramel|sirop d'agave|sirop d'erable)\b/, "Epicerie sucree"],
+  [/\b(pain|baguette|brioche|viennoiserie|croissant|wrap|tortilla|pain de mie|pita|naan)\b/, "Boulangerie"],
+  [/\b(surgele|glace|sorbet|frites surgelees|legumes surgeles|pizza surgelee)\b/, "Surgeles"],
+  [/\b(eau|jus|soda|coca|limonade|the|cafe|infusion|biere|vin|champagne|cidre)\b/, "Boissons"],
+  [/\b(chips|cacahuete|amande|noix de cajou|pistache|olive(s)? aperitif|tarama|houmous|tzatziki)\b/, "Aperitif"],
+  [/\b(savon|shampoing|dentifrice|lessive|liquide vaisselle|essuie-tout|sopalin|papier toilette|eponge)\b/, "Hygiene & entretien"],
+];
+
+export function classifyItem(name: string): (typeof CATEGORIES)[number] {
+  const s = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  for (const [re, cat] of itemRules) {
+    if (re.test(s)) return cat;
+  }
+  return "Autres";
+}
 
 function normalizeCategory(value: unknown) {
   const raw = String(value ?? "").toLowerCase().trim();
   const compact = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (categoryMap[raw] || categoryMap[compact]) return categoryMap[raw] ?? categoryMap[compact];
-  if (compact.includes("fruit") || compact.includes("legume") || compact.includes("primeur")) return "Fruits & legumes";
-  if (compact.includes("viande") || compact.includes("poisson") || compact.includes("boucher")) return "Viandes & poissons";
-  if (compact.includes("cremer") || compact.includes("lait") || compact.includes("fromage") || compact.includes("frais")) return "Cremerie";
-  if (compact.includes("epicer")) return "Epicerie";
+  if (compact.includes("fruit")) return "Fruits";
+  if (compact.includes("legume") || compact.includes("primeur")) return "Legumes";
+  if (compact.includes("poisson") || compact.includes("mer")) return "Poissons & fruits de mer";
+  if (compact.includes("viande") || compact.includes("boucher") || compact.includes("volaille")) return "Viandes";
+  if (compact.includes("charcut")) return "Charcuterie";
+  if (compact.includes("fromage")) return "Fromages";
+  if (compact.includes("cremer") || compact.includes("lait") || compact.includes("oeuf")) return "Cremerie & oeufs";
+  if (compact.includes("conserv")) return "Conserves";
+  if (compact.includes("sauce") || compact.includes("condim")) return "Sauces & condiments";
+  if (compact.includes("epice") || compact.includes("herbe")) return "Herbes & epices";
+  if (compact.includes("huile") || compact.includes("vinaigre")) return "Huiles & vinaigres";
+  if (compact.includes("pate") || compact.includes("riz") || compact.includes("feculent")) return "Pates, riz & feculents";
+  if (compact.includes("sucr") || compact.includes("patiss") || compact.includes("dessert")) return "Epicerie sucree";
+  if (compact.includes("epicer")) return "Epicerie salee";
   if (compact.includes("boulanger") || compact.includes("pain")) return "Boulangerie";
   if (compact.includes("surgele")) return "Surgeles";
   if (compact.includes("boisson")) return "Boissons";
+  if (compact.includes("aperit")) return "Aperitif";
+  if (compact.includes("hygien") || compact.includes("entretien")) return "Hygiene & entretien";
   return "Autres";
 }
 
@@ -532,7 +618,7 @@ const shoppingGenBaseSchema = z.object({
         qty: z.string().default(""),
         category: z.preprocess(
           normalizeCategory,
-          z.enum(["Fruits & legumes", "Viandes & poissons", "Cremerie", "Epicerie", "Boulangerie", "Surgeles", "Boissons", "Autres"]).default("Autres"),
+          z.enum(CATEGORIES).default("Autres"),
         ),
       }),
     )

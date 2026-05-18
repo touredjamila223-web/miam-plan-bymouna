@@ -135,12 +135,32 @@ function BatchCookingMode() {
 
         {session.meals?.length ? (
           <div className="bg-secondary/40 rounded-xl p-4">
-            <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">Cette session prépare</div>
+            <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">Plats cuisinés intégralement</div>
             <ul className="text-sm space-y-1">
-              {session.meals.map((m: any) => (
-                <li key={m.recipe_id + m.date}>• {m.day} {m.slot} — {m.title}</li>
+              {(session.cooked_meals ?? []).map((m: any, i: number) => (
+                <li key={i}>• {m.title} — {m.appliance}{m.program ? ` (${m.program})` : ""} · {m.duration_minutes} min</li>
               ))}
             </ul>
+          </div>
+        ) : null}
+
+        {stepIdx === total - 1 && session.final_checklist?.length ? (
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+            <div className="text-xs font-semibold uppercase text-primary mb-2">Checklist de fin</div>
+            <div className="space-y-1">
+              {session.final_checklist.map((c: any, i: number) => {
+                const key = `final-${i}`;
+                const done = !!checked[key];
+                return (
+                  <button key={key} onClick={() => toggle(key)} className={`w-full text-left flex items-start gap-2 p-2 rounded-lg ${done ? "bg-primary/10" : ""}`}>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${done ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground"}`}>
+                      {done && <Check className="w-3 h-3" />}
+                    </div>
+                    <span className={`text-sm ${done ? "line-through text-muted-foreground" : ""}`}>{c.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : null}
       </div>

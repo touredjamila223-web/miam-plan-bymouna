@@ -850,19 +850,22 @@ FORMAT STRICT : retourne uniquement {"items":[{"item":"...","qty":"...","categor
 function normalizeBatchOutput(raw: unknown) {
   if (!raw || typeof raw !== "object") return raw;
   const data = raw as Record<string, any>;
-  const basesSource = data.bases ?? data.preparations_de_base ?? data.préparations_de_base ?? data.preparations ?? [];
   const stepsSource = data.parallel_steps ?? data.etapes_paralleles ?? data["étapes_parallèles"] ?? data.planning ?? data.deroule ?? [];
-  const finishesSource = data.meal_finishes ?? data.finitions ?? data.finitions_repas ?? [];
+  const cookedSource = data.cooked_meals ?? data.repas_cuisines ?? data.repas_cuisinés ?? data.plats ?? [];
+  const checklistSource = data.final_checklist ?? data.checklist_finale ?? data.checklist ?? [];
   return {
     title: String(data.title ?? data.titre ?? "Session batch cooking de la semaine"),
     total_time: Math.max(60, Math.round(Number(data.total_time ?? data.temps_total ?? data.duree_totale ?? data.durée_totale ?? 150)) || 150),
-    bases: Array.isArray(basesSource)
-      ? basesSource.map((b: any) => ({
-          name: String(b?.name ?? b?.nom ?? b?.title ?? b?.titre ?? "Base préparée"),
-          qty: String(b?.qty ?? b?.quantity ?? b?.quantite ?? b?.quantité ?? "à ajuster"),
-          use_in: Array.isArray(b?.use_in ?? b?.utilise_dans ?? b?.utilisé_dans)
-            ? (b.use_in ?? b.utilise_dans ?? b.utilisé_dans).map(String)
-            : [],
+    cooked_meals: Array.isArray(cookedSource)
+      ? cookedSource.map((m: any) => ({
+          recipe_id: String(m?.recipe_id ?? m?.id ?? ""),
+          title: String(m?.title ?? m?.titre ?? ""),
+          appliance: String(m?.appliance ?? m?.appareil ?? "—"),
+          program: m?.program ?? m?.programme ? String(m?.program ?? m?.programme) : undefined,
+          temperature: m?.temperature ?? m?.température ? String(m?.temperature ?? m?.température) : undefined,
+          duration_minutes: Math.max(1, Math.round(Number(m?.duration_minutes ?? m?.duree ?? m?.durée ?? 30)) || 30),
+          start_at_minute: Math.max(0, Math.round(Number(m?.start_at_minute ?? m?.debut ?? m?.début ?? 0)) || 0),
+          notes: m?.notes ?? m?.note ? String(m?.notes ?? m?.note) : undefined,
         }))
       : [],
     parallel_steps: Array.isArray(stepsSource)
@@ -874,12 +877,10 @@ function normalizeBatchOutput(raw: unknown) {
             : [String(s?.task ?? s?.description ?? s?.texte ?? "Préparation batch")],
         }))
       : [],
-    meal_finishes: Array.isArray(finishesSource)
-      ? finishesSource.map((m: any) => ({
-          recipe_id: String(m?.recipe_id ?? m?.id ?? ""),
-          finish_steps: Array.isArray(m?.finish_steps ?? m?.etapes_finition ?? m?.étapes_finition)
-            ? (m.finish_steps ?? m.etapes_finition ?? m.étapes_finition).map(String)
-            : [String(m?.finition_rapide ?? m?.finish ?? "Réchauffer et assembler.")],
+    final_checklist: Array.isArray(checklistSource)
+      ? checklistSource.map((c: any) => ({
+          recipe_id: String(c?.recipe_id ?? c?.id ?? ""),
+          label: String(c?.label ?? c?.text ?? c?.texte ?? "Plat prêt, portionné et au frigo"),
         }))
       : [],
   };
@@ -888,9 +889,18 @@ function normalizeBatchOutput(raw: unknown) {
 const batchBaseSchema = z.object({
   title: z.string(),
   total_time: z.number().int().min(60).max(240),
-  bases: z.array(z.object({ name: z.string().min(1), qty: z.string(), use_in: z.array(z.string()) })).min(1),
+  cooked_meals: z.array(z.object({
+    recipe_id: z.string().min(1),
+    title: z.string().min(1),
+    appliance: z.string().min(1),
+    program: z.string().optional(),
+    temperature: z.string().optional(),
+    duration_minutes: z.number().int().min(1).max(360),
+    start_at_minute: z.number().int().min(0).max(360),
+    notes: z.string().optional(),
+  })).min(1),
   parallel_steps: z.array(z.object({ time_block: z.string(), duration_minutes: z.number().int().min(5).max(120), tasks: z.array(z.string()).min(1) })).min(1),
-  meal_finishes: z.array(z.object({ recipe_id: z.string().min(1), finish_steps: z.array(z.string()).min(1) })).min(1),
+  final_checklist: z.array(z.object({ recipe_id: z.string().min(1), label: z.string().min(1) })).min(1),
 });
 const batchSchema: z.ZodType<z.infer<typeof batchBaseSchema>, z.ZodTypeDef, unknown> = z.preprocess(
   normalizeBatchOutput,
@@ -911,7 +921,7 @@ export const generateBatch = createServerFn({ method: "POST" })
     end.setDate(end.getDate() + 7);
     const { data: plan } = await supabase
       .from("meal_plan")
-      .select("id, date, slot, recipe_id, recipes(id, title, ingredients, protein, cuisine_style)")
+      .select("id, date, slot, recipe_id, recipes(id, title, ingredients, protein, cuisine_style, appliance, prep_time, steps)")
       .eq("user_id", userId)
       .gte("date", data.week_start)
       .lt("date", end.toISOString().slice(0, 10))
@@ -935,20 +945,29 @@ export const generateBatch = createServerFn({ method: "POST" })
       const ings = Array.isArray(m.recipes.ingredients)
         ? m.recipes.ingredients.slice(0, 8).map((i: any) => `${i.qty ?? ""} ${i.name ?? ""}`.trim()).join(", ")
         : "";
-      return `- id=${m.recipes.id} | ${FR_DAYS[dayIdx]} ${m.slot} | "${m.recipes.title}" | protéine: ${m.recipes.protein ?? "n/a"} | ingrédients: ${ings}`;
+      const firstSteps = Array.isArray(m.recipes.steps)
+        ? m.recipes.steps.slice(0, 3).map((s: any) => s?.text ?? "").filter(Boolean).join(" | ")
+        : "";
+      return `- id=${m.recipes.id} | ${FR_DAYS[dayIdx]} ${m.slot} | "${m.recipes.title}" | appareil: ${m.recipes.appliance ?? "non précisé"} | cuisson: ${m.recipes.prep_time ?? "?"} min | protéine: ${m.recipes.protein ?? "n/a"} | ingrédients: ${ings} | étapes-clés: ${firstSteps}`;
     }).join("\n");
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-2.5-flash");
     const object = await generateJson({
       model,
-      system: `Tu conçois une session de batch cooking dominicale (2-3h) pour ${servings} personnes, basée EXACTEMENT sur les repas déjà planifiés ci-dessous. N'invente AUCUN nouveau repas.
-Règles :
-- Identifie des BASES (légumes rôtis, céréales cuites, protéines pré-cuites/marinées, sauces) MUTUALISÉES entre plusieurs repas planifiés
-- Organise des ÉTAPES PARALLÈLES par bloc de temps (avec duration_minutes) en utilisant : ${appliances}
-- Pour CHAQUE repas listé, fournis 2-5 étapes de FINITION rapide (5-10 min) le jour J, en référençant la base préparée
-- Respecte : ${restrictions.join(", ") || "aucune restriction"}
-FORMAT JSON STRICT : {"title":"...","total_time":150,"bases":[{"name":"...","qty":"...","use_in":["titre du repas"]}],"parallel_steps":[{"time_block":"0-30 min","duration_minutes":30,"tasks":["..."]}],"meal_finishes":[{"recipe_id":"<id exact>","finish_steps":["..."]}]}. Le champ recipe_id DOIT être l'id exact fourni dans la liste.`,
+      system: `Tu organises une session UNIQUE de batch cooking (samedi ou dimanche) pour ${servings} personnes. L'utilisateur cuisine INTÉGRALEMENT tous les plats de la semaine en une seule session, les portionne et les met au frigo. Chaque soir il n'aura qu'à RÉCHAUFFER.
+
+Règles ABSOLUES :
+- Chaque plat planifié doit être ENTIÈREMENT cuisiné pendant la session (pas de "base" à finir plus tard, pas de finition jour J).
+- Chaque plat utilise l'APPAREIL associé à la recette (champ "appareil" ci-dessous). N'IGNORE JAMAIS l'appareil et ne le remplace pas. Si "non précisé", choisis parmi : ${appliances}.
+- Précise pour chaque plat : appliance exact, program (ex : "Pression / Viande"), temperature (ex : "180°C"), duration_minutes, et start_at_minute (le moment où ce plat démarre, en minutes depuis le début de la session).
+- ORDRE OPTIMAL : démarre en PREMIER les plats à cuisson LONGUE (mijotés, four lent, cocotte) pour qu'ils tournent pendant que tu prépares les plats plus rapides. Maximise le parallélisme entre appareils (chaque appareil peut tourner en parallèle des autres).
+- "parallel_steps" = la timeline de la session découpée en blocs de temps (ex : "0-15 min", "15-45 min"…). Pour chaque bloc, liste les TÂCHES concrètes à mener en parallèle (ex : "Lancer le bœuf bourguignon au Cookeo : Mijotage 90 min", "Pendant ce temps, éplucher et tailler les légumes du curry").
+- "final_checklist" : une ligne par plat planifié, pour cocher que le plat est cuit, portionné (${servings} parts) et rangé au frigo.
+- "total_time" : durée TOTALE de la session (du début à la fin, parallélisme inclus), en minutes.
+- Respecte les restrictions alimentaires : ${restrictions.join(", ") || "aucune"}.
+
+FORMAT JSON STRICT : {"title":"...","total_time":150,"cooked_meals":[{"recipe_id":"<id exact>","title":"...","appliance":"cookeo","program":"Mijotage","temperature":"","duration_minutes":90,"start_at_minute":0,"notes":""}],"parallel_steps":[{"time_block":"0-15 min","duration_minutes":15,"tasks":["..."]}],"final_checklist":[{"recipe_id":"<id exact>","label":"Bœuf bourguignon : ${servings} portions au frigo"}]}. Le champ recipe_id DOIT être un id EXACT de la liste fournie. Chaque plat planifié DOIT apparaître dans cooked_meals ET dans final_checklist.`,
       prompt: `Repas planifiés cette semaine :\n${mealsBrief}\n\nGénère la session batch cooking pour ces repas précis.`,
       schema: batchSchema,
       maxOutputTokens: 7000,

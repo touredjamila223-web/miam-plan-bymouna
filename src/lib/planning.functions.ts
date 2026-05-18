@@ -921,7 +921,7 @@ export const generateBatch = createServerFn({ method: "POST" })
     end.setDate(end.getDate() + 7);
     const { data: plan } = await supabase
       .from("meal_plan")
-      .select("id, date, slot, recipe_id, recipes(id, title, ingredients, protein, cuisine_style)")
+      .select("id, date, slot, recipe_id, recipes(id, title, ingredients, protein, cuisine_style, appliance, prep_time, steps)")
       .eq("user_id", userId)
       .gte("date", data.week_start)
       .lt("date", end.toISOString().slice(0, 10))
@@ -945,20 +945,29 @@ export const generateBatch = createServerFn({ method: "POST" })
       const ings = Array.isArray(m.recipes.ingredients)
         ? m.recipes.ingredients.slice(0, 8).map((i: any) => `${i.qty ?? ""} ${i.name ?? ""}`.trim()).join(", ")
         : "";
-      return `- id=${m.recipes.id} | ${FR_DAYS[dayIdx]} ${m.slot} | "${m.recipes.title}" | protéine: ${m.recipes.protein ?? "n/a"} | ingrédients: ${ings}`;
+      const firstSteps = Array.isArray(m.recipes.steps)
+        ? m.recipes.steps.slice(0, 3).map((s: any) => s?.text ?? "").filter(Boolean).join(" | ")
+        : "";
+      return `- id=${m.recipes.id} | ${FR_DAYS[dayIdx]} ${m.slot} | "${m.recipes.title}" | appareil: ${m.recipes.appliance ?? "non précisé"} | cuisson: ${m.recipes.prep_time ?? "?"} min | protéine: ${m.recipes.protein ?? "n/a"} | ingrédients: ${ings} | étapes-clés: ${firstSteps}`;
     }).join("\n");
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-2.5-flash");
     const object = await generateJson({
       model,
-      system: `Tu conçois une session de batch cooking dominicale (2-3h) pour ${servings} personnes, basée EXACTEMENT sur les repas déjà planifiés ci-dessous. N'invente AUCUN nouveau repas.
-Règles :
-- Identifie des BASES (légumes rôtis, céréales cuites, protéines pré-cuites/marinées, sauces) MUTUALISÉES entre plusieurs repas planifiés
-- Organise des ÉTAPES PARALLÈLES par bloc de temps (avec duration_minutes) en utilisant : ${appliances}
-- Pour CHAQUE repas listé, fournis 2-5 étapes de FINITION rapide (5-10 min) le jour J, en référençant la base préparée
-- Respecte : ${restrictions.join(", ") || "aucune restriction"}
-FORMAT JSON STRICT : {"title":"...","total_time":150,"bases":[{"name":"...","qty":"...","use_in":["titre du repas"]}],"parallel_steps":[{"time_block":"0-30 min","duration_minutes":30,"tasks":["..."]}],"meal_finishes":[{"recipe_id":"<id exact>","finish_steps":["..."]}]}. Le champ recipe_id DOIT être l'id exact fourni dans la liste.`,
+      system: `Tu organises une session UNIQUE de batch cooking (samedi ou dimanche) pour ${servings} personnes. L'utilisateur cuisine INTÉGRALEMENT tous les plats de la semaine en une seule session, les portionne et les met au frigo. Chaque soir il n'aura qu'à RÉCHAUFFER.
+
+Règles ABSOLUES :
+- Chaque plat planifié doit être ENTIÈREMENT cuisiné pendant la session (pas de "base" à finir plus tard, pas de finition jour J).
+- Chaque plat utilise l'APPAREIL associé à la recette (champ "appareil" ci-dessous). N'IGNORE JAMAIS l'appareil et ne le remplace pas. Si "non précisé", choisis parmi : ${appliances}.
+- Précise pour chaque plat : appliance exact, program (ex : "Pression / Viande"), temperature (ex : "180°C"), duration_minutes, et start_at_minute (le moment où ce plat démarre, en minutes depuis le début de la session).
+- ORDRE OPTIMAL : démarre en PREMIER les plats à cuisson LONGUE (mijotés, four lent, cocotte) pour qu'ils tournent pendant que tu prépares les plats plus rapides. Maximise le parallélisme entre appareils (chaque appareil peut tourner en parallèle des autres).
+- "parallel_steps" = la timeline de la session découpée en blocs de temps (ex : "0-15 min", "15-45 min"…). Pour chaque bloc, liste les TÂCHES concrètes à mener en parallèle (ex : "Lancer le bœuf bourguignon au Cookeo : Mijotage 90 min", "Pendant ce temps, éplucher et tailler les légumes du curry").
+- "final_checklist" : une ligne par plat planifié, pour cocher que le plat est cuit, portionné (${servings} parts) et rangé au frigo.
+- "total_time" : durée TOTALE de la session (du début à la fin, parallélisme inclus), en minutes.
+- Respecte les restrictions alimentaires : ${restrictions.join(", ") || "aucune"}.
+
+FORMAT JSON STRICT : {"title":"...","total_time":150,"cooked_meals":[{"recipe_id":"<id exact>","title":"...","appliance":"cookeo","program":"Mijotage","temperature":"","duration_minutes":90,"start_at_minute":0,"notes":""}],"parallel_steps":[{"time_block":"0-15 min","duration_minutes":15,"tasks":["..."]}],"final_checklist":[{"recipe_id":"<id exact>","label":"Bœuf bourguignon : ${servings} portions au frigo"}]}. Le champ recipe_id DOIT être un id EXACT de la liste fournie. Chaque plat planifié DOIT apparaître dans cooked_meals ET dans final_checklist.`,
       prompt: `Repas planifiés cette semaine :\n${mealsBrief}\n\nGénère la session batch cooking pour ces repas précis.`,
       schema: batchSchema,
       maxOutputTokens: 7000,

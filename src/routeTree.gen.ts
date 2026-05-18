@@ -22,6 +22,7 @@ import { Route as BatchRouteImport } from './routes/batch'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RecettesIdRouteImport } from './routes/recettes.$id'
+import { Route as BatchCuisineRouteImport } from './routes/batch.cuisine'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as RecettesCuisineIdRouteImport } from './routes/recettes.cuisine.$id'
 
@@ -90,6 +91,11 @@ const RecettesIdRoute = RecettesIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => RecettesRoute,
 } as any)
+const BatchCuisineRoute = BatchCuisineRouteImport.update({
+  id: '/cuisine',
+  path: '/cuisine',
+  getParentRoute: () => BatchRoute,
+} as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
@@ -104,7 +110,7 @@ const RecettesCuisineIdRoute = RecettesCuisineIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/batch': typeof BatchRoute
+  '/batch': typeof BatchRouteWithChildren
   '/chat': typeof ChatRoute
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
@@ -115,13 +121,14 @@ export interface FileRoutesByFullPath {
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
+  '/batch/cuisine': typeof BatchCuisineRoute
   '/recettes/$id': typeof RecettesIdRoute
   '/recettes/cuisine/$id': typeof RecettesCuisineIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/batch': typeof BatchRoute
+  '/batch': typeof BatchRouteWithChildren
   '/chat': typeof ChatRoute
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
+  '/batch/cuisine': typeof BatchCuisineRoute
   '/recettes/$id': typeof RecettesIdRoute
   '/recettes/cuisine/$id': typeof RecettesCuisineIdRoute
 }
@@ -139,7 +147,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/batch': typeof BatchRoute
+  '/batch': typeof BatchRouteWithChildren
   '/chat': typeof ChatRoute
   '/courses': typeof CoursesRoute
   '/frigo': typeof FrigoRoute
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/profil': typeof ProfilRoute
   '/recettes': typeof RecettesRouteWithChildren
   '/api/chat': typeof ApiChatRoute
+  '/batch/cuisine': typeof BatchCuisineRoute
   '/recettes/$id': typeof RecettesIdRoute
   '/recettes/cuisine/$id': typeof RecettesCuisineIdRoute
 }
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/profil'
     | '/recettes'
     | '/api/chat'
+    | '/batch/cuisine'
     | '/recettes/$id'
     | '/recettes/cuisine/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/profil'
     | '/recettes'
     | '/api/chat'
+    | '/batch/cuisine'
     | '/recettes/$id'
     | '/recettes/cuisine/$id'
   id:
@@ -203,6 +214,7 @@ export interface FileRouteTypes {
     | '/profil'
     | '/recettes'
     | '/api/chat'
+    | '/batch/cuisine'
     | '/recettes/$id'
     | '/recettes/cuisine/$id'
   fileRoutesById: FileRoutesById
@@ -210,7 +222,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
-  BatchRoute: typeof BatchRoute
+  BatchRoute: typeof BatchRouteWithChildren
   ChatRoute: typeof ChatRoute
   CoursesRoute: typeof CoursesRoute
   FrigoRoute: typeof FrigoRoute
@@ -316,6 +328,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecettesIdRouteImport
       parentRoute: typeof RecettesRoute
     }
+    '/batch/cuisine': {
+      id: '/batch/cuisine'
+      path: '/cuisine'
+      fullPath: '/batch/cuisine'
+      preLoaderRoute: typeof BatchCuisineRouteImport
+      parentRoute: typeof BatchRoute
+    }
     '/api/chat': {
       id: '/api/chat'
       path: '/api/chat'
@@ -332,6 +351,16 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface BatchRouteChildren {
+  BatchCuisineRoute: typeof BatchCuisineRoute
+}
+
+const BatchRouteChildren: BatchRouteChildren = {
+  BatchCuisineRoute: BatchCuisineRoute,
+}
+
+const BatchRouteWithChildren = BatchRoute._addFileChildren(BatchRouteChildren)
 
 interface RecettesRouteChildren {
   RecettesIdRoute: typeof RecettesIdRoute
@@ -350,7 +379,7 @@ const RecettesRouteWithChildren = RecettesRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
-  BatchRoute: BatchRoute,
+  BatchRoute: BatchRouteWithChildren,
   ChatRoute: ChatRoute,
   CoursesRoute: CoursesRoute,
   FrigoRoute: FrigoRoute,
@@ -365,3 +394,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

@@ -624,6 +624,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       family_name,
       exclude,
       hint: combinedHint || undefined,
+      course_type: data.course_type,
     });
     const valid = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0 && !isDuplicate(r));
     // Filtre intra-lot final : enlève les variantes proches entre elles

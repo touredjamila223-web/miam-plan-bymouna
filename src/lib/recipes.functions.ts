@@ -395,7 +395,7 @@ Règles ABSOLUES :
 - Si l'utilisateur demande un plat précis (tajine, wok, gratin, curry, risotto...), respecte les codes de CE plat. Ne transforme pas en assemblage générique.
 - Les légumes doivent s'accorder naturellement avec la protéine et le style.
 - La recette doit donner envie et être savoureuse, pas une simple liste d'ingrédients.
-- Renseigne "protein" avec la protéine principale en un seul mot simple (poulet, boeuf, agneau, porc, poisson, fruits de mer, oeufs, tofu, légumineuses, fromage, végétarien).
+- Renseigne "protein" avec la protéine principale en UN SEUL MOT SIMPLE choisi STRICTEMENT dans cette liste fermée : poulet, dinde, veau, boeuf, agneau, porc, canard, lapin, poisson, fruits de mer, oeufs, tofu, légumineuses, fromage, végétarien. JAMAIS d'autre valeur, jamais de qualificatif ("blanc de", "haché", "filet de", etc.).
 - Renseigne "vegetables" avec la liste des légumes utilisés (3 à 6 entrées, nom simple en minuscules).
 - Renseigne "calories" : estimation honnête des kcal par portion.
 - "prep_time" = temps TOTAL réaliste en minutes (préparation + cuisson). Il DOIT varier selon la recette : un tartare = 10-15 min, un sauté wok = 15-20 min, une poêlée = 20-25 min, un mijoté Cookeo = 25-40 min, un rôti four = 45-90 min, un bourguignon = 90-180 min. N'utilise JAMAIS une valeur par défaut, calcule honnêtement.

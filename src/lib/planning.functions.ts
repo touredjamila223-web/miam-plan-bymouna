@@ -417,7 +417,7 @@ export const addShoppingItem = createServerFn({ method: "POST" })
       .insert({
         user_id: userId,
         item: data.item,
-        category: data.category ?? "Autres",
+        category: data.category ?? classifyItem(data.item),
         qty: data.qty ?? null,
         source: "manual",
       })

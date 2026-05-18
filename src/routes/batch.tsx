@@ -2,9 +2,9 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { generateBatch, saveBatchSession } from "@/lib/planning.functions";
+import { generateBatch } from "@/lib/planning.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { ChefHat, Sparkles, Timer, Layers, ShoppingCart, Play, RotateCcw } from "lucide-react";
+import { ChefHat, Sparkles, Timer, Layers, Play, RotateCcw, CheckSquare, Cpu } from "lucide-react";
 
 export const Route = createFileRoute("/batch")({
   head: () => ({ meta: [{ title: "Batch cooking — MiamPlan" }] }),
@@ -23,9 +23,7 @@ function BatchPage() {
   const { user } = useAuth();
   const nav = useNavigate();
   const gen = useServerFn(generateBatch);
-  const save = useServerFn(saveBatchSession);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [plan, setPlan] = useState<any>(null);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()).toISOString().slice(0, 10));
 
@@ -59,19 +57,6 @@ function BatchPage() {
     try { localStorage.removeItem("batch_session"); } catch {}
   }
 
-  async function handleSave() {
-    if (!plan) return;
-    setSaving(true);
-    try {
-      const res = await save({ data: { bases: plan.bases ?? [] } });
-      toast.success(`${res.shopping_inserted} bases ajoutées à la liste de courses`);
-    } catch (e: any) {
-      toast.error(e.message ?? "Erreur");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function startCooking() {
     if (!plan) return;
     sessionStorage.setItem("batch_session", JSON.stringify(plan));
@@ -92,7 +77,7 @@ function BatchPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-3xl font-bold flex items-center gap-2"><Layers className="w-7 h-7 text-primary" />Batch cooking</h1>
-        <p className="text-muted-foreground">Cuisinez 2-3h le dimanche pour les repas déjà planifiés cette semaine.</p>
+        <p className="text-muted-foreground">Une seule session le week-end : tous les plats de la semaine sont cuits, portionnés et rangés. Le soir, il ne reste qu'à réchauffer.</p>
       </header>
 
       <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
@@ -127,29 +112,31 @@ function BatchPage() {
               <button onClick={startCooking} className="bg-primary text-primary-foreground px-5 py-2.5 rounded-full font-medium inline-flex items-center gap-2">
                 <Play className="w-4 h-4" />Démarrer la session
               </button>
-              <button onClick={handleSave} disabled={saving} className="bg-secondary text-secondary-foreground px-5 py-2.5 rounded-full font-medium inline-flex items-center gap-2 disabled:opacity-50">
-                <ShoppingCart className="w-4 h-4" />{saving ? "..." : "Ajouter les bases aux courses"}
-              </button>
             </div>
           </section>
 
           <section>
-            <h3 className="font-semibold mb-3">Bases à préparer</h3>
-            <div className="grid sm:grid-cols-2 gap-3">
-              {plan.bases?.map((b: any, i: number) => (
+            <h3 className="font-semibold mb-3 flex items-center gap-2"><Cpu className="w-4 h-4" />Plan de cuisson (ordre optimisé)</h3>
+            <div className="space-y-2">
+              {[...(plan.cooked_meals ?? [])].sort((a: any, b: any) => a.start_at_minute - b.start_at_minute).map((m: any, i: number) => (
                 <div key={i} className="bg-card border border-border rounded-xl p-3">
-                  <div className="font-medium">{b.name}</div>
-                  <div className="text-xs text-muted-foreground">{b.qty}</div>
-                  {b.use_in?.length ? (
-                    <div className="text-xs mt-2"><span className="text-muted-foreground">Pour :</span> {b.use_in.join(", ")}</div>
-                  ) : null}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-medium">{m.title}</div>
+                    <div className="text-xs text-muted-foreground shrink-0">T+{m.start_at_minute} min · {m.duration_minutes} min</div>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    <span className="font-medium text-foreground">{m.appliance}</span>
+                    {m.program ? ` · ${m.program}` : ""}
+                    {m.temperature ? ` · ${m.temperature}` : ""}
+                  </div>
+                  {m.notes ? <div className="text-xs mt-1">{m.notes}</div> : null}
                 </div>
               ))}
             </div>
           </section>
 
           <section>
-            <h3 className="font-semibold mb-3">Déroulé de la session (étapes parallèles)</h3>
+            <h3 className="font-semibold mb-3">Déroulé de la session (en parallèle)</h3>
             <div className="space-y-3">
               {plan.parallel_steps?.map((s: any, i: number) => (
                 <div key={i} className="bg-card border border-border rounded-xl p-4">
@@ -165,22 +152,24 @@ function BatchPage() {
           </section>
 
           <section>
+            <h3 className="font-semibold mb-3 flex items-center gap-2"><CheckSquare className="w-4 h-4" />Checklist de fin de session</h3>
+            <div className="space-y-1">
+              {plan.final_checklist?.map((c: any, i: number) => (
+                <div key={i} className="text-sm bg-card border border-border rounded-lg px-3 py-2">☐ {c.label}</div>
+              ))}
+            </div>
+          </section>
+
+          <section>
             <h3 className="font-semibold mb-3">Repas couverts cette semaine</h3>
             <div className="grid sm:grid-cols-2 gap-3">
-              {plan.meals?.map((m: any) => {
-                const finish = plan.meal_finishes?.find((f: any) => f.recipe_id === m.recipe_id);
-                return (
-                  <div key={m.recipe_id + m.date} className="bg-card border border-border rounded-xl p-4">
-                    <div className="text-xs text-muted-foreground uppercase">{m.day} · {m.slot}</div>
-                    <Link to="/recettes/$id" params={{ id: m.recipe_id }} className="font-semibold hover:text-primary">{m.title}</Link>
-                    {finish ? (
-                      <ul className="text-sm space-y-1 text-muted-foreground mt-2">
-                        {finish.finish_steps.map((f: string, j: number) => <li key={j}>– {f}</li>)}
-                      </ul>
-                    ) : null}
-                  </div>
-                );
-              })}
+              {plan.meals?.map((m: any) => (
+                <div key={m.recipe_id + m.date} className="bg-card border border-border rounded-xl p-4">
+                  <div className="text-xs text-muted-foreground uppercase">{m.day} · {m.slot}</div>
+                  <Link to="/recettes/$id" params={{ id: m.recipe_id }} className="font-semibold hover:text-primary">{m.title}</Link>
+                  <div className="text-xs text-muted-foreground mt-1">À réchauffer le jour J</div>
+                </div>
+              ))}
             </div>
           </section>
         </div>

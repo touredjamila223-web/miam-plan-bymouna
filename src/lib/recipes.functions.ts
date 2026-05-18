@@ -543,15 +543,21 @@ export const generateRecipe = createServerFn({ method: "POST" })
     const servings = data.servings ?? profile.data?.household_size ?? 4;
     const family_name = profile.data?.family_name;
 
-    const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
-
-    const recipe = await generateJson({
-      model,
-      system: buildSystemPrompt({ appliance: data.appliance, restrictions, servings, family_name }),
-      prompt: `Génère une recette complète pour : ${data.prompt}`,
-      schema: recipeSchema,
-    });
+    const recipe = await (async () => {
+      try {
+        const gateway = createLovableAiGatewayProvider(apiKey);
+        const model = gateway("google/gemini-2.5-flash");
+        return await generateJson({
+          model,
+          system: buildSystemPrompt({ appliance: data.appliance, restrictions, servings, family_name }),
+          prompt: `Génère une recette complète pour : ${data.prompt}`,
+          schema: recipeSchema,
+        });
+      } catch (error) {
+        if (isAiPaymentError(error)) return fallbackRecipe({ prompt: data.prompt, appliance: data.appliance, servings, restrictions });
+        throw error;
+      }
+    })();
     return { ...recipe, appliance: data.appliance };
   });
 
@@ -570,14 +576,21 @@ export async function generateRecipeForUser(opts: {
   const restrictions = (prefs.data ?? []).map((p) => p.restriction);
   const servings = profile.data?.household_size ?? 4;
   const family_name = profile.data?.family_name ?? null;
-  const gateway = createLovableAiGatewayProvider(apiKey);
-  const model = gateway("google/gemini-2.5-flash");
-  const recipe = await generateJson({
-    model,
-    system: buildSystemPrompt({ appliance: opts.appliance, restrictions, servings, family_name }),
-    prompt: `Génère une recette complète pour : ${opts.prompt}`,
-    schema: recipeSchema,
-  });
+  const recipe = await (async () => {
+    try {
+      const gateway = createLovableAiGatewayProvider(apiKey);
+      const model = gateway("google/gemini-2.5-flash");
+      return await generateJson({
+        model,
+        system: buildSystemPrompt({ appliance: opts.appliance, restrictions, servings, family_name }),
+        prompt: `Génère une recette complète pour : ${opts.prompt}`,
+        schema: recipeSchema,
+      });
+    } catch (error) {
+      if (isAiPaymentError(error)) return fallbackRecipe({ prompt: opts.prompt, appliance: opts.appliance, servings, restrictions });
+      throw error;
+    }
+  })();
   return { ...recipe, appliance: opts.appliance };
 }
 

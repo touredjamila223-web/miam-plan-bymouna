@@ -934,6 +934,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
           appliance?: string;
           maxTime?: number;
           sort?: "recent" | "rated" | "loved" | "todo";
+          course_type?: string;
         }
       | undefined) =>
       input ?? {},
@@ -943,7 +944,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
     let query = supabase
       .from("recipes")
       .select(
-        "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories, appliance",
+        "id, title, photo_url, cuisine_style, course_type, difficulty, prep_time, source, description, protein, vegetables, calories, appliance",
       )
       .eq("owner_id", userId)
       .limit(120);
@@ -957,6 +958,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
     if (data?.protein) query = query.eq("protein", data.protein);
     if (data?.cuisine) query = query.eq("cuisine_style", data.cuisine);
     if (data?.appliance) query = query.eq("appliance", data.appliance);
+    if (data?.course_type) query = query.eq("course_type", data.course_type);
     if (data?.maxTime) query = query.lte("prep_time", data.maxTime);
     const { data: rows, error } = await query.order("created_at", { ascending: false });
     if (error) throw new Error(error.message);

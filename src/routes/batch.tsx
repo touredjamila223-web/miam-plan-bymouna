@@ -47,8 +47,16 @@ function BatchPage() {
       const p = await gen({ data: { week_start: weekStart } });
       setPlan(p);
       try { localStorage.setItem("batch_session", JSON.stringify({ plan: p, week_start: weekStart })); } catch {}
+      if ((p as any)?.ai_fallback) {
+        toast.warning("Session créée sans optimisation IA avancée : le service IA a refusé l’appel, mais tes repas sont conservés.");
+      }
     }
-    catch (e: any) { toast.error(e.message ?? "Erreur"); }
+    catch (e: any) {
+      const message = e.message === "Payment Required"
+        ? "Le service IA a refusé l’appel côté application. Tes crédits Lovable de construction ne sont pas en cause."
+        : e.message ?? "Erreur";
+      toast.error(message);
+    }
     finally { setLoading(false); }
   }
 
@@ -108,6 +116,7 @@ function BatchPage() {
           <section className="bg-card border border-border rounded-2xl p-5">
             <h2 className="text-xl font-bold mb-1">{plan.title}</h2>
             <p className="text-sm text-muted-foreground flex items-center gap-1"><Timer className="w-4 h-4" />~{plan.total_time} min de cuisine</p>
+            {plan.ai_fallback ? <p className="text-xs text-muted-foreground mt-2">Plan de secours généré automatiquement à partir de tes repas, car le service IA n'a pas accepté l'appel.</p> : null}
             <div className="flex flex-wrap gap-2 mt-4">
               <button onClick={startCooking} className="bg-primary text-primary-foreground px-5 py-2.5 rounded-full font-medium inline-flex items-center gap-2">
                 <Play className="w-4 h-4" />Démarrer la session

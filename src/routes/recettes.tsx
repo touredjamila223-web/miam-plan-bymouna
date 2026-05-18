@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
 import { listMyRecipes, deleteRecipe, listRecipeIdsForRefresh, refreshRecipeSteps } from "@/lib/recipes.functions";
+import { upsertMealPlan } from "@/lib/planning.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PROTEINS, CUISINE_STYLES, APPLIANCES, COURSE_TYPES } from "@/lib/constants";
 import { RecipeCompactCard } from "@/components/recipe-compact-card";
 import { RecipeCardSkeletonGrid } from "@/components/recipe-card-skeleton";
-import { Search, X, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { Search, X, Sparkles, Trash2, Wand2, CalendarPlus } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/recettes")({
@@ -40,6 +41,7 @@ function Recettes() {
   const removeFn = useServerFn(deleteRecipe);
   const listIdsFn = useServerFn(listRecipeIdsForRefresh);
   const refreshFn = useServerFn(refreshRecipeSteps);
+  const upsertPlan = useServerFn(upsertMealPlan);
   const qc = useQueryClient();
   const { user } = useAuth();
   const [search, setSearch] = useState("");
@@ -52,6 +54,40 @@ function Recettes() {
   const [bulk, setBulk] = useState<{ running: boolean; done: number; total: number; failed: number }>({
     running: false, done: 0, total: 0, failed: 0,
   });
+  const [planPicker, setPlanPicker] = useState<{ recipe: any } | null>(null);
+
+  const slotFor = (courseType: string | null | undefined): "soir" | "entree" | "soupe" | "dessert" => {
+    if (courseType === "entree" || courseType === "soupe" || courseType === "dessert") return courseType;
+    return "soir";
+  };
+
+  function nextSevenDays() {
+    const out: { date: string; label: string }[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayNames = ["Dim.", "Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam."];
+    for (let i = 0; i < 7; i += 1) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + i);
+      const label = i === 0 ? "Aujourd'hui" : i === 1 ? "Demain" : `${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
+      out.push({ date: d.toISOString().slice(0, 10), label });
+    }
+    return out;
+  }
+
+  async function addToPlan(date: string) {
+    if (!planPicker) return;
+    const r = planPicker.recipe;
+    const slot = slotFor(r.course_type);
+    try {
+      await upsertPlan({ data: { date, slot, recipe_id: r.id } });
+      toast.success(`« ${r.title} » ajoutée au planning`);
+      qc.invalidateQueries({ queryKey: ["plan"] });
+      setPlanPicker(null);
+    } catch (e: any) {
+      toast.error(e.message ?? "Erreur ajout planning");
+    }
+  }
 
   async function bulkRefreshSteps() {
     if (bulk.running) return;
@@ -231,18 +267,32 @@ function Recettes() {
             key={r.id}
             recipe={r}
             action={
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  softDelete({ id: r.id, title: r.title });
-                }}
-                className="p-1.5 rounded-full bg-background/80 backdrop-blur border border-border text-muted-foreground hover:text-destructive hover:border-destructive transition"
-                aria-label="Supprimer la recette"
-                title="Supprimer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex gap-1">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setPlanPicker({ recipe: r });
+                  }}
+                  className="p-1.5 rounded-full bg-background/80 backdrop-blur border border-border text-muted-foreground hover:text-primary hover:border-primary transition"
+                  aria-label="Ajouter au planning"
+                  title="Ajouter au planning"
+                >
+                  <CalendarPlus className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    softDelete({ id: r.id, title: r.title });
+                  }}
+                  className="p-1.5 rounded-full bg-background/80 backdrop-blur border border-border text-muted-foreground hover:text-destructive hover:border-destructive transition"
+                  aria-label="Supprimer la recette"
+                  title="Supprimer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             }
           />
         ))}
@@ -260,6 +310,45 @@ function Recettes() {
         )}
       </div>
       )}
+
+      {planPicker && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-4"
+          onClick={() => setPlanPicker(null)}
+        >
+          <div className="bg-card rounded-2xl max-w-md w-full p-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold mb-1">Ajouter au planning</h3>
+            <p className="text-sm text-muted-foreground mb-3 truncate">
+              « {planPicker.recipe.title} » —{" "}
+              <span className="capitalize">{SLOT_LABEL_FR[slotFor(planPicker.recipe.course_type)]}</span>
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {nextSevenDays().map((d) => (
+                <button
+                  key={d.date}
+                  onClick={() => addToPlan(d.date)}
+                  className="border border-border rounded-lg px-3 py-2 text-sm hover:border-primary hover:bg-primary/5 text-left"
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setPlanPicker(null)}
+              className="mt-3 text-xs text-muted-foreground hover:text-foreground w-full text-center"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const SLOT_LABEL_FR: Record<"soir" | "entree" | "soupe" | "dessert", string> = {
+  soir: "Dîner",
+  entree: "Entrée",
+  soupe: "Soupe",
+  dessert: "Dessert",
+};

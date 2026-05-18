@@ -907,6 +907,75 @@ const batchSchema: z.ZodType<z.infer<typeof batchBaseSchema>, z.ZodTypeDef, unkn
   batchBaseSchema,
 );
 
+function isAiPaymentError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const anyError = error as any;
+  return message.includes("Payment Required") || anyError?.status === 402 || anyError?.statusCode === 402 || anyError?.response?.status === 402;
+}
+
+function buildFallbackBatchSession(meals: any[], servings: number) {
+  const FR_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+  const applianceLoads: Record<string, number> = {};
+  const sortedMeals = [...meals]
+    .filter((m: any) => m.recipes)
+    .sort((a: any, b: any) => Number(b.recipes?.prep_time ?? 30) - Number(a.recipes?.prep_time ?? 30));
+
+  const cooked_meals = sortedMeals.map((m: any) => {
+    const recipe = m.recipes;
+    const appliance = String(recipe.appliance ?? "appareil principal");
+    const key = appliance.toLowerCase().trim() || "appareil principal";
+    const duration = Math.max(15, Math.min(180, Math.round(Number(recipe.prep_time ?? 35)) || 35));
+    const start = applianceLoads[key] ?? 0;
+    applianceLoads[key] = start + duration;
+    return {
+      recipe_id: recipe.id,
+      title: recipe.title,
+      appliance,
+      program: appliance.toLowerCase().includes("cookeo") ? "Cuisson sous pression / mijotage selon la recette" : "Cuisson complète selon la recette",
+      temperature: appliance.toLowerCase().includes("four") ? "180°C" : "réglage adapté à l’appareil",
+      duration_minutes: duration,
+      start_at_minute: start,
+      notes: `${servings} portions à cuire entièrement, portionner puis conserver au réfrigérateur.`,
+    };
+  });
+
+  const total_time = Math.max(60, Math.min(240, Math.max(...Object.values(applianceLoads), 60)));
+  const boundaries = Array.from(new Set([0, ...cooked_meals.flatMap((m) => [m.start_at_minute, m.start_at_minute + m.duration_minutes]), total_time]))
+    .filter((n) => n >= 0 && n <= total_time)
+    .sort((a, b) => a - b);
+
+  const parallel_steps = boundaries.slice(0, -1).map((start, index) => {
+    const end = boundaries[index + 1];
+    const starting = cooked_meals.filter((m) => m.start_at_minute >= start && m.start_at_minute < end);
+    const running = cooked_meals.filter((m) => m.start_at_minute < start && m.start_at_minute + m.duration_minutes > start);
+    const tasks = [
+      ...starting.map((m) => `Lancer ${m.title} sur ${m.appliance} : ${m.program}, durée ${m.duration_minutes} min.`),
+      ...running.map((m) => `Surveiller ${m.title} sur ${m.appliance}, poursuivre la cuisson complète.`),
+    ];
+    return {
+      time_block: `${start}-${end} min`,
+      duration_minutes: Math.max(5, end - start),
+      tasks: tasks.length ? tasks : ["Préparer les contenants, étiquettes et zones de refroidissement."],
+    };
+  });
+
+  return {
+    title: "Session batch cooking optimisée",
+    total_time,
+    cooked_meals: cooked_meals.sort((a, b) => a.start_at_minute - b.start_at_minute),
+    parallel_steps: parallel_steps.length ? parallel_steps : [{ time_block: `0-${total_time} min`, duration_minutes: total_time, tasks: ["Cuire tous les plats, portionner puis ranger au frais."] }],
+    final_checklist: meals.map((m: any) => {
+      const d = new Date(m.date);
+      const dayIdx = (d.getDay() + 6) % 7;
+      return {
+        recipe_id: m.recipes.id,
+        label: `${m.recipes.title} (${FR_DAYS[dayIdx]}) : ${servings} portions cuites, refroidies, portionnées et rangées au frigo`,
+      };
+    }),
+    ai_fallback: true,
+  };
+}
+
 export const generateBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ week_start: z.string() }).parse(input))
@@ -951,11 +1020,13 @@ export const generateBatch = createServerFn({ method: "POST" })
       return `- id=${m.recipes.id} | ${FR_DAYS[dayIdx]} ${m.slot} | "${m.recipes.title}" | appareil: ${m.recipes.appliance ?? "non précisé"} | cuisson: ${m.recipes.prep_time ?? "?"} min | protéine: ${m.recipes.protein ?? "n/a"} | ingrédients: ${ings} | étapes-clés: ${firstSteps}`;
     }).join("\n");
 
-    const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
-    const object = await generateJson({
-      model,
-      system: `Tu organises une session UNIQUE de batch cooking (samedi ou dimanche) pour ${servings} personnes. L'utilisateur cuisine INTÉGRALEMENT tous les plats de la semaine en une seule session, les portionne et les met au frigo. Chaque soir il n'aura qu'à RÉCHAUFFER.
+    const object = await (async () => {
+      try {
+        const gateway = createLovableAiGatewayProvider(apiKey);
+        const model = gateway("google/gemini-2.5-flash");
+        return await generateJson({
+          model,
+          system: `Tu organises une session UNIQUE de batch cooking (samedi ou dimanche) pour ${servings} personnes. L'utilisateur cuisine INTÉGRALEMENT tous les plats de la semaine en une seule session, les portionne et les met au frigo. Chaque soir il n'aura qu'à RÉCHAUFFER.
 
 Règles ABSOLUES :
 - Chaque plat planifié doit être ENTIÈREMENT cuisiné pendant la session (pas de "base" à finir plus tard, pas de finition jour J).
@@ -968,10 +1039,15 @@ Règles ABSOLUES :
 - Respecte les restrictions alimentaires : ${restrictions.join(", ") || "aucune"}.
 
 FORMAT JSON STRICT : {"title":"...","total_time":150,"cooked_meals":[{"recipe_id":"<id exact>","title":"...","appliance":"cookeo","program":"Mijotage","temperature":"","duration_minutes":90,"start_at_minute":0,"notes":""}],"parallel_steps":[{"time_block":"0-15 min","duration_minutes":15,"tasks":["..."]}],"final_checklist":[{"recipe_id":"<id exact>","label":"Bœuf bourguignon : ${servings} portions au frigo"}]}. Le champ recipe_id DOIT être un id EXACT de la liste fournie. Chaque plat planifié DOIT apparaître dans cooked_meals ET dans final_checklist.`,
-      prompt: `Repas planifiés cette semaine :\n${mealsBrief}\n\nGénère la session batch cooking pour ces repas précis.`,
-      schema: batchSchema,
-      maxOutputTokens: 7000,
-    });
+          prompt: `Repas planifiés cette semaine :\n${mealsBrief}\n\nGénère la session batch cooking pour ces repas précis.`,
+          schema: batchSchema,
+          maxOutputTokens: 7000,
+        });
+      } catch (error) {
+        if (isAiPaymentError(error)) return buildFallbackBatchSession(meals, servings);
+        throw error;
+      }
+    })();
 
     // Attach meta about meals for client display
     return {

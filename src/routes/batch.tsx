@@ -1,10 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { generateBatch, saveBatchSession } from "@/lib/planning.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { ChefHat, Sparkles, Timer, Layers, ShoppingCart, Play } from "lucide-react";
+import { ChefHat, Sparkles, Timer, Layers, ShoppingCart, Play, RotateCcw } from "lucide-react";
 
 export const Route = createFileRoute("/batch")({
   head: () => ({ meta: [{ title: "Batch cooking — MiamPlan" }] }),
@@ -29,11 +29,34 @@ function BatchPage() {
   const [plan, setPlan] = useState<any>(null);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()).toISOString().slice(0, 10));
 
+  // Restore last generated session on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("batch_session");
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved?.plan) {
+          setPlan(saved.plan);
+          if (saved.week_start) setWeekStart(saved.week_start);
+        }
+      }
+    } catch {}
+  }, []);
+
   async function run() {
     setLoading(true);
-    try { setPlan(await gen({ data: { week_start: weekStart } })); }
+    try {
+      const p = await gen({ data: { week_start: weekStart } });
+      setPlan(p);
+      try { localStorage.setItem("batch_session", JSON.stringify({ plan: p, week_start: weekStart })); } catch {}
+    }
     catch (e: any) { toast.error(e.message ?? "Erreur"); }
     finally { setLoading(false); }
+  }
+
+  function reset() {
+    setPlan(null);
+    try { localStorage.removeItem("batch_session"); } catch {}
   }
 
   async function handleSave() {
@@ -83,8 +106,13 @@ function BatchPage() {
           />
         </label>
         <button onClick={run} disabled={loading} className="w-full sm:w-auto bg-gradient-to-r from-primary to-primary/80 text-primary-foreground px-6 py-3 rounded-full font-medium flex items-center justify-center gap-2 disabled:opacity-50">
-          <Sparkles className="w-5 h-5" />{loading ? "L'IA prépare votre session..." : "Générer ma session batch"}
+          <Sparkles className="w-5 h-5" />{loading ? "L'IA prépare votre session..." : plan ? "Régénérer la session" : "Générer ma session batch"}
         </button>
+        {plan && (
+          <button onClick={reset} className="w-full sm:w-auto text-sm text-muted-foreground hover:text-foreground inline-flex items-center justify-center gap-2">
+            <RotateCcw className="w-3.5 h-3.5" />Réinitialiser la session
+          </button>
+        )}
         <p className="text-xs text-muted-foreground">
           L'IA s'appuie sur les repas que tu as planifiés cette semaine dans <Link to="/planning" className="text-primary underline">Planning</Link>.
         </p>

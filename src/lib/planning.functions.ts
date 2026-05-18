@@ -667,8 +667,10 @@ export const generateShoppingFromPlan = createServerFn({ method: "POST" })
     const model = gateway("google/gemini-2.5-flash");
     const object = await generateJson({
       model,
-      system: `Tu consolides une liste de courses a partir des recettes prevues. Additionne les quantites identiques, regroupe par categorie de rayon, retire ce qui est deja dans le frigo.
-FORMAT STRICT : retourne uniquement {"items":[{"item":"...","qty":"...","category":"Fruits & legumes|Viandes & poissons|Cremerie|Epicerie|Boulangerie|Surgeles|Boissons|Autres"}]}. N'utilise jamais une clé "courses" ni des catégories comme objets racines.`,
+      system: `Tu consolides une liste de courses a partir des recettes prevues. Additionne les quantites identiques, regroupe par rayon precis de supermarche, retire ce qui est deja dans le frigo.
+Categories autorisees (choisis la plus precise) : Fruits | Legumes | Viandes | Poissons & fruits de mer | Charcuterie | Cremerie & oeufs | Fromages | Pates, riz & feculents | Conserves | Sauces & condiments | Herbes & epices | Huiles & vinaigres | Epicerie salee | Epicerie sucree | Boulangerie | Surgeles | Boissons | Aperitif | Hygiene & entretien | Autres.
+Ne mets jamais des fruits et des legumes ensemble. Ne range pas dans "Epicerie salee" un produit qui a une categorie plus precise (ex: huile -> Huiles & vinaigres, ketchup -> Sauces & condiments, riz -> Pates, riz & feculents).
+FORMAT STRICT : retourne uniquement {"items":[{"item":"...","qty":"...","category":"..."}]}. N'utilise jamais une clé "courses" ni des catégories comme objets racines.`,
       prompt: `Frigo dispo : ${fridgeStr}.\n\nRecettes prevues :\n${recipes}`,
       schema: shoppingGenSchema,
     });
@@ -678,7 +680,7 @@ FORMAT STRICT : retourne uniquement {"items":[{"item":"...","qty":"...","categor
       user_id: userId,
       item: i.item,
       qty: i.qty,
-      category: i.category,
+      category: i.category === "Autres" || i.category === "Epicerie salee" ? classifyItem(i.item) : i.category,
       source: "plan",
     }));
     if (rows.length) await supabase.from("shopping_list").insert(rows);

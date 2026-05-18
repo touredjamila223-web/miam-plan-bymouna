@@ -396,7 +396,19 @@ export const listShopping = createServerFn({ method: "GET" })
       .eq("user_id", userId)
       .order("category");
     if (error) throw new Error(error.message);
-    return data ?? [];
+    const rows = data ?? [];
+    const validSet = new Set<string>(CATEGORIES);
+    const toFix = rows.filter((r: any) => !r.category || !validSet.has(r.category));
+    if (toFix.length) {
+      await Promise.all(
+        toFix.map((r: any) => {
+          const newCat = classifyItem(r.item ?? "");
+          r.category = newCat;
+          return supabase.from("shopping_list").update({ category: newCat }).eq("id", r.id);
+        }),
+      );
+    }
+    return rows;
   });
 
 export const addShoppingItem = createServerFn({ method: "POST" })

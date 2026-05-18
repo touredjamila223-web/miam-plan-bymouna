@@ -8,6 +8,7 @@ import { listMyRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { CalendarDays, X, ChevronLeft, ChevronRight, Plus, Sparkles, Download, Trash2, Repeat } from "lucide-react";
 import { generateWeekPlanPdf } from "@/lib/planning-pdf";
+import { COURSE_TYPES, type CourseTypeId } from "@/lib/constants";
 
 export const Route = createFileRoute("/planning")({
   head: () => ({ meta: [{ title: "Planning — MiamPlan" }] }),
@@ -16,13 +17,25 @@ export const Route = createFileRoute("/planning")({
 
 function startOfWeek(d: Date) {
   const x = new Date(d);
-  const day = (x.getDay() + 6) % 7; // Monday=0
+  const day = (x.getDay() + 6) % 7;
   x.setDate(x.getDate() - day);
   x.setHours(0, 0, 0, 0);
   return x;
 }
-const DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-const SLOTS: Array<"matin" | "midi" | "soir"> = ["matin", "midi", "soir"];
+const DAY_LABELS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+
+type Slot = "soir" | "entree" | "soupe" | "dessert";
+const EXTRA_SLOTS: { slot: Exclude<Slot, "soir">; label: string; courseType: CourseTypeId }[] = [
+  { slot: "entree", label: "Entrée", courseType: "entree" },
+  { slot: "soupe", label: "Soupe", courseType: "soupe" },
+  { slot: "dessert", label: "Dessert", courseType: "dessert" },
+];
+const SLOT_LABEL: Record<Slot, string> = {
+  soir: "Dîner",
+  entree: "Entrée",
+  soupe: "Soupe",
+  dessert: "Dessert",
+};
 
 function PlanningPage() {
   const { user } = useAuth();
@@ -43,10 +56,13 @@ function PlanningPage() {
     queryFn: () => listPlan({ data: { week_start: weekStartStr } }),
     enabled: !!user,
   });
-  const { data: recipes } = useQuery({
-    queryKey: ["recipes-all"],
-    queryFn: () => listRec({ data: {} }),
-    enabled: !!user,
+
+  const [picker, setPicker] = useState<{ date: string; slot: Slot; courseType: CourseTypeId; replaceId?: string } | null>(null);
+
+  const { data: pickerRecipes } = useQuery({
+    queryKey: ["recipes-by-course", picker?.courseType],
+    queryFn: () => listRec({ data: { course_type: picker!.courseType } }),
+    enabled: !!user && !!picker,
   });
 
   const days = useMemo(
@@ -60,8 +76,7 @@ function PlanningPage() {
   );
 
   const upsertMut = useMutation({
-    mutationFn: (v: { date: string; slot: "matin" | "midi" | "soir"; recipe_id: string }) =>
-      upsert({ data: v }),
+    mutationFn: (v: { date: string; slot: Slot; recipe_id: string }) => upsert({ data: v }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["plan", weekStartStr] }),
   });
   const removeMut = useMutation({
@@ -69,15 +84,13 @@ function PlanningPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["plan", weekStartStr] }),
   });
 
-  const [picker, setPicker] = useState<{ date: string; slot: "matin" | "midi" | "soir"; replaceId?: string } | null>(null);
-
   async function autoFillWeek(replace: boolean) {
     if (filling) return;
-    if (replace && !window.confirm("Remplacer toutes les recettes déjà planifiées cette semaine ?")) return;
+    if (replace && !window.confirm("Remplacer les dîners déjà planifiés cette semaine ?")) return;
     setFilling(true);
     try {
-      const res = await fillWeekFn({ data: { week_start: weekStartStr, slots: ["midi", "soir"], replace } });
-      toast.success(`${res.inserted} repas ajoutés à la semaine`);
+      const res = await fillWeekFn({ data: { week_start: weekStartStr, slots: ["soir"], replace } });
+      toast.success(`${res.inserted} dîners ajoutés à la semaine`);
       qc.invalidateQueries({ queryKey: ["plan", weekStartStr] });
     } catch (e: any) {
       toast.error(e.message ?? "Erreur");
@@ -120,8 +133,11 @@ function PlanningPage() {
     );
   }
 
-  function findEntry(date: string, slot: string) {
-    return (plan ?? []).find((p: any) => p.date === date && p.slot === slot);
+  function entriesFor(date: string): { dinner: any | null; extras: any[] } {
+    const all = (plan ?? []).filter((p: any) => p.date === date);
+    const dinner = all.find((p: any) => p.slot === "soir") ?? null;
+    const extras = all.filter((p: any) => p.slot !== "soir" && p.slot !== "matin" && p.slot !== "midi");
+    return { dinner, extras };
   }
 
   function shiftWeek(delta: number) {
@@ -156,14 +172,12 @@ function PlanningPage() {
           onClick={() => autoFillWeek(true)}
           disabled={filling}
           className="border border-border px-3 py-2 rounded-full text-sm inline-flex items-center gap-2 disabled:opacity-60"
-          title="Remplacer le planning existant"
         >
           Régénérer tout
         </button>
         <button
           onClick={clearWeek}
           className="border border-border px-3 py-2 rounded-full text-sm inline-flex items-center gap-2 text-destructive hover:bg-destructive/10"
-          title="Vider toute la semaine"
         >
           <Trash2 className="w-4 h-4" />Vider la semaine
         </button>
@@ -175,52 +189,92 @@ function PlanningPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+      <div className="space-y-3">
         {days.map((d, i) => {
           const dateStr = d.toISOString().slice(0, 10);
           const isToday = dateStr === new Date().toISOString().slice(0, 10);
+          const { dinner, extras } = entriesFor(dateStr);
+          const usedSlots = new Set<string>(extras.map((e: any) => e.slot));
           return (
-            <div key={dateStr} className={`bg-card border rounded-2xl p-3 ${isToday ? "border-primary" : "border-border"}`}>
-              <div className="text-center mb-3">
-                <div className="text-xs text-muted-foreground uppercase">{DAY_LABELS[i]}</div>
-                <div className="text-xl font-bold">{d.getDate()}</div>
+            <div key={dateStr} className={`bg-card border rounded-2xl p-4 ${isToday ? "border-primary" : "border-border"}`}>
+              <div className="flex items-baseline justify-between mb-3">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">{DAY_LABELS[i]}</div>
+                  <div className="text-lg font-semibold">{d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}</div>
+                </div>
+                {isToday && <span className="text-[10px] uppercase bg-primary/15 text-primary px-2 py-0.5 rounded-full">Aujourd'hui</span>}
               </div>
-              <div className="space-y-2">
-                {SLOTS.map((slot) => {
-                  const e: any = findEntry(dateStr, slot);
-                  return (
-                    <div key={slot}>
-                      <div className="text-[10px] uppercase text-muted-foreground mb-1">{slot}</div>
-                      {e ? (
-                        <div className="bg-secondary/40 rounded-lg p-2 relative">
-                          <Link to="/recettes/$id" params={{ id: e.recipe_id }} className="text-xs font-medium leading-tight line-clamp-2 block pr-10">
-                            {e.recipes?.title ?? "Recette"}
-                          </Link>
-                          <div className="absolute top-1 right-1 flex gap-0.5">
-                            <button
-                              onClick={() => setPicker({ date: dateStr, slot, replaceId: e.id })}
-                              className="p-1 rounded hover:bg-background/60"
-                              title="Remplacer"
-                              aria-label="Remplacer"
-                            >
-                              <Repeat className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => removeMut.mutate(e.id)}
-                              className="p-1 rounded hover:bg-destructive/20 text-destructive"
-                              title="Supprimer"
-                              aria-label="Supprimer"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button onClick={() => setPicker({ date: dateStr, slot })} className="w-full text-xs text-muted-foreground border border-dashed border-border rounded-lg p-2 hover:border-primary hover:text-primary flex items-center justify-center gap-1"><Plus className="w-3 h-3" />Ajouter</button>
-                      )}
+
+              {/* Main dinner */}
+              <div className="mb-2">
+                <div className="text-[10px] uppercase text-muted-foreground mb-1">Dîner</div>
+                {dinner ? (
+                  <div className="bg-secondary/40 rounded-lg p-3 flex items-start justify-between gap-2">
+                    <Link to="/recettes/$id" params={{ id: dinner.recipe_id }} className="flex-1 min-w-0">
+                      <div className="font-medium leading-tight">{dinner.recipes?.title ?? "Recette"}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {[dinner.recipes?.cuisine_style, dinner.recipes?.prep_time ? `${dinner.recipes.prep_time} min` : null].filter(Boolean).join(" · ")}
+                      </div>
+                    </Link>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        onClick={() => setPicker({ date: dateStr, slot: "soir", courseType: "plat", replaceId: dinner.id })}
+                        className="p-1.5 rounded hover:bg-background/60"
+                        title="Remplacer"
+                      >
+                        <Repeat className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => removeMut.mutate(dinner.id)}
+                        className="p-1.5 rounded hover:bg-destructive/20 text-destructive"
+                        title="Supprimer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  );
-                })}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setPicker({ date: dateStr, slot: "soir", courseType: "plat" })}
+                    className="w-full text-sm text-muted-foreground border border-dashed border-border rounded-lg p-3 hover:border-primary hover:text-primary flex items-center justify-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" />Choisir un plat principal
+                  </button>
+                )}
+              </div>
+
+              {/* Extras */}
+              {extras.length > 0 && (
+                <div className="space-y-1.5 mt-3">
+                  {extras.map((e: any) => (
+                    <div key={e.id} className="bg-muted/40 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                      <Link to="/recettes/$id" params={{ id: e.recipe_id }} className="flex-1 min-w-0 text-sm">
+                        <span className="text-[10px] uppercase text-muted-foreground mr-2">{SLOT_LABEL[e.slot as Slot] ?? e.slot}</span>
+                        <span className="font-medium">{e.recipes?.title ?? "Recette"}</span>
+                      </Link>
+                      <button
+                        onClick={() => removeMut.mutate(e.id)}
+                        className="p-1 rounded hover:bg-destructive/20 text-destructive shrink-0"
+                        title="Supprimer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add extras */}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {EXTRA_SLOTS.filter((s) => !usedSlots.has(s.slot)).map((s) => (
+                  <button
+                    key={s.slot}
+                    onClick={() => setPicker({ date: dateStr, slot: s.slot, courseType: s.courseType })}
+                    className="text-xs text-muted-foreground hover:text-primary border border-dashed border-border hover:border-primary rounded-full px-2.5 py-1 inline-flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" />{s.label}
+                  </button>
+                ))}
               </div>
             </div>
           );
@@ -234,9 +288,19 @@ function PlanningPage() {
       {picker && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-4" onClick={() => setPicker(null)}>
           <div className="bg-card rounded-2xl max-w-md w-full max-h-[80vh] overflow-y-auto p-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold mb-3">{picker.replaceId ? "Remplacer par" : "Choisir une recette"}</h3>
+            <h3 className="font-bold mb-1">
+              {picker.replaceId ? "Remplacer par" : `Ajouter ${SLOT_LABEL[picker.slot].toLowerCase()}`}
+            </h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              {COURSE_TYPES.find((c) => c.id === picker.courseType)?.label}
+            </p>
             <div className="space-y-1">
-              {(recipes ?? []).map((r: any) => (
+              {(pickerRecipes ?? []).length === 0 && (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  Aucune recette de ce type dans votre bibliothèque. <Link to="/generer" className="text-primary hover:underline">Générer une recette →</Link>
+                </p>
+              )}
+              {(pickerRecipes ?? []).map((r: any) => (
                 <button
                   key={r.id}
                   onClick={() => {

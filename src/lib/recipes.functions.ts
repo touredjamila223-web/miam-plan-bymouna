@@ -264,6 +264,13 @@ function normalizeRecipe(raw: unknown) {
     title: String(r.title ?? r.titre ?? r.name ?? r.nom ?? "Recette familiale"),
     description: String(r.description ?? r.summary ?? r.resume ?? r.résumé ?? r.title ?? r.titre ?? "Une recette familiale cohérente et savoureuse."),
     cuisine_style: String(r.cuisine_style ?? r.style_cuisine ?? r.cuisine ?? r.origin ?? r.origine ?? "familial").toLowerCase(),
+    course_type: (() => {
+      const raw = String(r.course_type ?? r.type ?? r.categorie ?? r.catégorie ?? r.course ?? "plat").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (raw.includes("entr")) return "entree";
+      if (raw.includes("soup") || raw.includes("velout") || raw.includes("potage")) return "soupe";
+      if (raw.includes("dess") || raw.includes("gateau") || raw.includes("patiss")) return "dessert";
+      return "plat";
+    })(),
     difficulty: ["facile", "moyen", "difficile"].includes(r.difficulty ?? r.difficulte ?? r.difficulté) ? (r.difficulty ?? r.difficulte ?? r.difficulté) : "facile",
     prep_time: Math.max(5, Math.round(Number(r.prep_time ?? r.temps_preparation ?? r.temps_préparation ?? r.preparation_time ?? r.total_time ?? r.temps_total ?? r.cook_time ?? 0)) || 25),
     servings: Number(r.servings ?? r.portions ?? r.personnes ?? 4),

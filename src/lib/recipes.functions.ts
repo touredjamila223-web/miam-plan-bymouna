@@ -283,6 +283,7 @@ const recipeBaseSchema = z.object({
   title: z.string(),
   description: z.string(),
   cuisine_style: z.string(),
+  course_type: z.enum(["plat", "entree", "soupe", "dessert"]).default("plat"),
   difficulty: z.enum(["facile", "moyen", "difficile"]),
   prep_time: z.number().int().min(5).max(360),
   servings: z.number().int().min(1).max(20),

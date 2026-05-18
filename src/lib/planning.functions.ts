@@ -328,7 +328,7 @@ export const upsertMealPlan = createServerFn({ method: "POST" })
     z
       .object({
         date: z.string(),
-        slot: z.enum(["matin", "midi", "soir"]),
+        slot: z.enum(["soir", "entree", "soupe", "dessert"]),
         recipe_id: z.string().uuid(),
         servings: z.number().int().min(1).max(20).optional(),
       })
@@ -938,7 +938,7 @@ const weekPlanSchema = z.object({
     .array(
       z.object({
         day: z.number().int().min(0).max(6),
-        slot: z.enum(["matin", "midi", "soir"]),
+        slot: z.enum(["soir"]),
         recipe_id: z.string(),
       }),
     )
@@ -952,7 +952,7 @@ export const generateWeekPlan = createServerFn({ method: "POST" })
     z
       .object({
         week_start: z.string(),
-        slots: z.array(z.enum(["matin", "midi", "soir"])).default(["midi", "soir"]),
+        slots: z.array(z.enum(["soir"])).default(["soir"]),
         replace: z.boolean().default(false),
       })
       .parse(input),

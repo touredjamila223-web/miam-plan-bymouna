@@ -440,7 +440,7 @@ function fallbackRecipe(opts: {
   }
 
   return recipeSchema.parse({
-    title: opts.prompt.trim().length > 3 ? `${v.title} — inspiration ${opts.prompt.trim().slice(0, 40)}` : v.title,
+    title: v.title,
     description: `Une recette ${v.style} complète, familiale et savoureuse, pensée pour être cuite correctement avec ${opts.appliance}.`,
     cuisine_style: v.style,
     course_type: "plat",
@@ -824,18 +824,19 @@ export const refreshRecipeSteps = createServerFn({ method: "POST" })
     const servings = recipe.servings ?? profile.data?.household_size ?? 4;
     const appliance = recipe.appliance ?? "cookeo";
 
-    const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
-
-    const result = await generateJson({
-      model,
-      system: buildSystemPrompt({
-        appliance,
-        restrictions,
-        servings,
-        family_name: profile.data?.family_name ?? null,
-      }),
-      prompt: `Voici une recette EXISTANTE. Réécris UNIQUEMENT les étapes en suivant strictement les règles "ÉTAPES DÉTAILLÉES" et "appliance_settings" (mode officiel + intensité chiffrée/température, 6 à 10 étapes, gestes précis, indices de réussite). Ne change ni le titre, ni les ingrédients, ni la protéine. Conserve la cohérence avec la liste d'ingrédients fournie.
+    const result = await (async () => {
+      try {
+        const gateway = createLovableAiGatewayProvider(apiKey);
+        const model = gateway("google/gemini-2.5-flash");
+        return await generateJson({
+          model,
+          system: buildSystemPrompt({
+            appliance,
+            restrictions,
+            servings,
+            family_name: profile.data?.family_name ?? null,
+          }),
+          prompt: `Voici une recette EXISTANTE. Réécris UNIQUEMENT les étapes en suivant strictement les règles "ÉTAPES DÉTAILLÉES" et "appliance_settings" (mode officiel + intensité chiffrée/température, 6 à 10 étapes, gestes précis, indices de réussite). Ne change ni le titre, ni les ingrédients, ni la protéine. Conserve la cohérence avec la liste d'ingrédients fournie.
 
 Recette : ${recipe.title}
 Style : ${recipe.cuisine_style ?? ""}
@@ -845,9 +846,21 @@ Ingrédients : ${JSON.stringify(recipe.ingredients ?? [])}
 
 Réponds en JSON strict :
 { "prep_time": <minutes réalistes>, "steps": [ { "text": "...", "timer_minutes": 0, "appliance_settings": "..." }, ... ] }`,
-      schema: stepsOnlySchema,
-      maxOutputTokens: 4000,
-    });
+          schema: stepsOnlySchema,
+          maxOutputTokens: 4000,
+        });
+      } catch (error) {
+        if (isAiPaymentError(error)) {
+          return {
+            prep_time: recipe.prep_time,
+            steps: Array.isArray(recipe.steps) && recipe.steps.length >= 4
+              ? recipe.steps
+              : fallbackRecipe({ prompt: recipe.title, appliance, servings, restrictions }).steps,
+          };
+        }
+        throw error;
+      }
+    })();
 
     const { error: updErr } = await supabase
       .from("recipes")

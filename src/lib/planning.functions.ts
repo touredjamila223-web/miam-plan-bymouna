@@ -603,6 +603,134 @@ export function classifyItem(name: string): (typeof CATEGORIES)[number] {
   return "Autres";
 }
 
+// ---- Consolidation de la liste de courses ----
+
+function normalizeItemKey(name: string): string {
+  let s = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[()[\]]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  // Retire descripteurs courants qui ne changent pas le produit
+  s = s.replace(/\b(frais|fraiches?|bio|surgele(s|es)?|en poudre|en morceaux|en tranches?|tranche(s)?|emincee?s?|hache(s|e|es)?|rape(s|e|es)?|moulu(e|s|es)?|sec(he|hes|s)?|nature|liquide|entier(e|s|es)?|demi-ecreme|ecreme|jaune|rouge|vert(e|s|es)?|blanc(he|hes|s)?|noir(e|s|es)?|doux|douce|fort(e|s|es)?|petit(e|s|es)?|gros(se|ses|s)?|grande?s?|moyen(ne|nes|s)?|extra|premium|de saison|du marche)\b/g, " ");
+  s = s.replace(/\s+/g, " ").trim();
+  // singularisation très simple
+  s = s
+    .split(" ")
+    .map((w) => (w.length > 3 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w))
+    .join(" ");
+  return s;
+}
+
+const UNIT_ALIASES: Record<string, string> = {
+  g: "g", gr: "g", gramme: "g", grammes: "g",
+  kg: "kg", kilo: "kg", kilos: "kg", kilogramme: "kg", kilogrammes: "kg",
+  mg: "mg",
+  ml: "ml",
+  cl: "cl",
+  l: "l", litre: "l", litres: "l",
+  cs: "c.s.", "c.s": "c.s.", "c.s.": "c.s.", cuillere: "c.s.", "cuilleres a soupe": "c.s.", "cuillere a soupe": "c.s.", cas: "c.s.",
+  cc: "c.c.", "c.c": "c.c.", "c.c.": "c.c.", "cuillere a cafe": "c.c.", "cuilleres a cafe": "c.c.", cac: "c.c.",
+  pincee: "pincée", pincees: "pincée", pincee_: "pincée",
+  piece: "pièce", pieces: "pièce", unite: "pièce", unites: "pièce", u: "pièce",
+  gousse: "gousse", gousses: "gousse",
+  tranche: "tranche", tranches: "tranche",
+  botte: "botte", bottes: "botte",
+  sachet: "sachet", sachets: "sachet",
+  paquet: "paquet", paquets: "paquet",
+  boite: "boîte", boites: "boîte",
+  bocal: "bocal", bocaux: "bocal",
+  pot: "pot", pots: "pot",
+  brique: "brique", briques: "brique",
+};
+
+function parseQtyTokens(qty: string): Array<{ value: number; unit: string }> {
+  if (!qty) return [];
+  const cleaned = qty
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/,/g, ".");
+  const tokens: Array<{ value: number; unit: string }> = [];
+  const re = /(\d+(?:\.\d+)?)\s*([a-z.]*)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(cleaned)) !== null) {
+    const value = parseFloat(m[1]);
+    if (!isFinite(value) || value <= 0) continue;
+    let unit = (m[2] ?? "").replace(/\.+$/g, "").trim();
+    if (!unit) unit = "pièce";
+    unit = UNIT_ALIASES[unit] ?? unit;
+    tokens.push({ value, unit });
+  }
+  return tokens;
+}
+
+// Conversions vers une unité canonique pour additionner
+function canonical(u: string): { unit: string; factor: number } {
+  switch (u) {
+    case "kg": return { unit: "g", factor: 1000 };
+    case "g": return { unit: "g", factor: 1 };
+    case "mg": return { unit: "g", factor: 0.001 };
+    case "l": return { unit: "ml", factor: 1000 };
+    case "cl": return { unit: "ml", factor: 10 };
+    case "ml": return { unit: "ml", factor: 1 };
+    default: return { unit: u, factor: 1 };
+  }
+}
+
+function formatQty(unit: string, total: number): string {
+  if (unit === "g" && total >= 1000) {
+    const kg = total / 1000;
+    return `${Number.isInteger(kg) ? kg : kg.toFixed(2).replace(/\.?0+$/, "")} kg`;
+  }
+  if (unit === "ml" && total >= 1000) {
+    const l = total / 1000;
+    return `${Number.isInteger(l) ? l : l.toFixed(2).replace(/\.?0+$/, "")} L`;
+  }
+  const rounded = Math.round(total * 100) / 100;
+  const out = Number.isInteger(rounded) ? String(rounded) : String(rounded);
+  return unit === "pièce" ? `${out}` : `${out} ${unit}`;
+}
+
+function mergeQty(existing: string | null | undefined, incoming: string | null | undefined): string {
+  const all = [...parseQtyTokens(existing ?? ""), ...parseQtyTokens(incoming ?? "")];
+  if (!all.length) {
+    return [existing, incoming].filter(Boolean).join(" + ") || "";
+  }
+  // Additionne par unité canonique
+  const sums = new Map<string, number>();
+  for (const t of all) {
+    const c = canonical(t.unit);
+    sums.set(c.unit, (sums.get(c.unit) ?? 0) + t.value * c.factor);
+  }
+  return Array.from(sums.entries()).map(([u, v]) => formatQty(u, v)).join(" + ");
+}
+
+function consolidateItems<T extends { item: string; qty?: string | null; category?: string | null }>(
+  items: T[],
+): Array<{ item: string; qty: string; category: string }> {
+  const map = new Map<string, { item: string; qty: string; category: string }>();
+  for (const it of items) {
+    const cat = it.category && (CATEGORIES as readonly string[]).includes(it.category)
+      ? it.category
+      : classifyItem(it.item);
+    const key = `${cat}::${normalizeItemKey(it.item)}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.qty = mergeQty(existing.qty, it.qty ?? "");
+    } else {
+      map.set(key, {
+        item: it.item.trim(),
+        qty: (it.qty ?? "").trim(),
+        category: cat,
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
 function normalizeCategory(value: unknown) {
   const raw = String(value ?? "").toLowerCase().trim();
   const compact = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -695,20 +823,26 @@ FORMAT STRICT : retourne uniquement {"items":[{"item":"...","qty":"...","categor
     });
 
     await supabase.from("shopping_list").delete().eq("user_id", userId).eq("source", "plan");
-    const rows = object.items.map((i) => {
+    // 1) Force la catégorie via classifieur déterministe
+    const recategorized = object.items.map((i) => {
       const guess = classifyItem(i.item);
-      // Toujours préférer notre classifieur quand il reconnaît l'aliment
-      const category = guess !== "Autres" ? guess : i.category;
       return {
-        user_id: userId,
         item: i.item,
         qty: i.qty,
-        category,
-        source: "plan",
+        category: guess !== "Autres" ? guess : i.category,
       };
     });
+    // 2) Consolide les doublons en additionnant les quantités
+    const consolidated = consolidateItems(recategorized);
+    const rows = consolidated.map((i) => ({
+      user_id: userId,
+      item: i.item,
+      qty: i.qty,
+      category: i.category,
+      source: "plan",
+    }));
     if (rows.length) await supabase.from("shopping_list").insert(rows);
-    return object.items;
+    return consolidated;
   });
 
 // ============== BATCH COOKING ==============

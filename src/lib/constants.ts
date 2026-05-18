@@ -50,6 +50,15 @@ export const PROTEINS = [
   "végétarien",
 ] as const;
 
+export const COURSE_TYPES = [
+  { id: "plat", label: "Plat principal" },
+  { id: "entree", label: "Entrée" },
+  { id: "soupe", label: "Soupe" },
+  { id: "dessert", label: "Dessert" },
+] as const;
+
+export type CourseTypeId = (typeof COURSE_TYPES)[number]["id"];
+
 export type AppRecipe = {
   id?: string;
   title: string;

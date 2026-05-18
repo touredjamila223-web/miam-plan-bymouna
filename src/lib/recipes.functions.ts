@@ -940,12 +940,12 @@ export const importRecipeFromUrl = createServerFn({ method: "POST" })
     const restrictions = (prefs.data ?? []).map((p) => p.restriction);
     const servings = profile.data?.household_size ?? 4;
 
-    const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-2.5-flash");
-
-    return generateJson({
-      model,
-      system: `${buildSystemPrompt({ appliance: data.appliance, restrictions, servings, family_name: profile.data?.family_name ?? null })}
+    try {
+      const gateway = createLovableAiGatewayProvider(apiKey);
+      const model = gateway("google/gemini-2.5-flash");
+      return await generateJson({
+        model,
+        system: `${buildSystemPrompt({ appliance: data.appliance, restrictions, servings, family_name: profile.data?.family_name ?? null })}
 
 TÂCHE SPÉCIALE — IMPORT DEPUIS UNE PAGE WEB :
 - Extrais titre, ingrédients, étapes depuis le texte fourni.
@@ -953,10 +953,14 @@ TÂCHE SPÉCIALE — IMPORT DEPUIS UNE PAGE WEB :
 - ADAPTE les étapes à l'appareil ${data.appliance} en suivant strictement les règles "ÉTAPES DÉTAILLÉES" et "appliance_settings".
 - AJUSTE les quantités pour ${servings} personnes.
 - Si la page contient plusieurs recettes, prends la principale.`,
-      prompt: `URL : ${data.url}\n\nContenu :\n${text}`,
-      schema: recipeSchema,
-      maxOutputTokens: 6000,
-    });
+        prompt: `URL : ${data.url}\n\nContenu :\n${text}`,
+        schema: recipeSchema,
+        maxOutputTokens: 6000,
+      });
+    } catch (error) {
+      if (isAiPaymentError(error)) return fallbackRecipe({ prompt: "recette importée", appliance: data.appliance, servings, restrictions });
+      throw error;
+    }
   });
 
 export const importRecipeFromImage = createServerFn({ method: "POST" })

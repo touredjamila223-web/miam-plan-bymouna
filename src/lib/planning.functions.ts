@@ -850,19 +850,22 @@ FORMAT STRICT : retourne uniquement {"items":[{"item":"...","qty":"...","categor
 function normalizeBatchOutput(raw: unknown) {
   if (!raw || typeof raw !== "object") return raw;
   const data = raw as Record<string, any>;
-  const basesSource = data.bases ?? data.preparations_de_base ?? data.préparations_de_base ?? data.preparations ?? [];
   const stepsSource = data.parallel_steps ?? data.etapes_paralleles ?? data["étapes_parallèles"] ?? data.planning ?? data.deroule ?? [];
-  const finishesSource = data.meal_finishes ?? data.finitions ?? data.finitions_repas ?? [];
+  const cookedSource = data.cooked_meals ?? data.repas_cuisines ?? data.repas_cuisinés ?? data.plats ?? [];
+  const checklistSource = data.final_checklist ?? data.checklist_finale ?? data.checklist ?? [];
   return {
     title: String(data.title ?? data.titre ?? "Session batch cooking de la semaine"),
     total_time: Math.max(60, Math.round(Number(data.total_time ?? data.temps_total ?? data.duree_totale ?? data.durée_totale ?? 150)) || 150),
-    bases: Array.isArray(basesSource)
-      ? basesSource.map((b: any) => ({
-          name: String(b?.name ?? b?.nom ?? b?.title ?? b?.titre ?? "Base préparée"),
-          qty: String(b?.qty ?? b?.quantity ?? b?.quantite ?? b?.quantité ?? "à ajuster"),
-          use_in: Array.isArray(b?.use_in ?? b?.utilise_dans ?? b?.utilisé_dans)
-            ? (b.use_in ?? b.utilise_dans ?? b.utilisé_dans).map(String)
-            : [],
+    cooked_meals: Array.isArray(cookedSource)
+      ? cookedSource.map((m: any) => ({
+          recipe_id: String(m?.recipe_id ?? m?.id ?? ""),
+          title: String(m?.title ?? m?.titre ?? ""),
+          appliance: String(m?.appliance ?? m?.appareil ?? "—"),
+          program: m?.program ?? m?.programme ? String(m?.program ?? m?.programme) : undefined,
+          temperature: m?.temperature ?? m?.température ? String(m?.temperature ?? m?.température) : undefined,
+          duration_minutes: Math.max(1, Math.round(Number(m?.duration_minutes ?? m?.duree ?? m?.durée ?? 30)) || 30),
+          start_at_minute: Math.max(0, Math.round(Number(m?.start_at_minute ?? m?.debut ?? m?.début ?? 0)) || 0),
+          notes: m?.notes ?? m?.note ? String(m?.notes ?? m?.note) : undefined,
         }))
       : [],
     parallel_steps: Array.isArray(stepsSource)
@@ -874,12 +877,10 @@ function normalizeBatchOutput(raw: unknown) {
             : [String(s?.task ?? s?.description ?? s?.texte ?? "Préparation batch")],
         }))
       : [],
-    meal_finishes: Array.isArray(finishesSource)
-      ? finishesSource.map((m: any) => ({
-          recipe_id: String(m?.recipe_id ?? m?.id ?? ""),
-          finish_steps: Array.isArray(m?.finish_steps ?? m?.etapes_finition ?? m?.étapes_finition)
-            ? (m.finish_steps ?? m.etapes_finition ?? m.étapes_finition).map(String)
-            : [String(m?.finition_rapide ?? m?.finish ?? "Réchauffer et assembler.")],
+    final_checklist: Array.isArray(checklistSource)
+      ? checklistSource.map((c: any) => ({
+          recipe_id: String(c?.recipe_id ?? c?.id ?? ""),
+          label: String(c?.label ?? c?.text ?? c?.texte ?? "Plat prêt, portionné et au frigo"),
         }))
       : [],
   };
@@ -888,9 +889,18 @@ function normalizeBatchOutput(raw: unknown) {
 const batchBaseSchema = z.object({
   title: z.string(),
   total_time: z.number().int().min(60).max(240),
-  bases: z.array(z.object({ name: z.string().min(1), qty: z.string(), use_in: z.array(z.string()) })).min(1),
+  cooked_meals: z.array(z.object({
+    recipe_id: z.string().min(1),
+    title: z.string().min(1),
+    appliance: z.string().min(1),
+    program: z.string().optional(),
+    temperature: z.string().optional(),
+    duration_minutes: z.number().int().min(1).max(360),
+    start_at_minute: z.number().int().min(0).max(360),
+    notes: z.string().optional(),
+  })).min(1),
   parallel_steps: z.array(z.object({ time_block: z.string(), duration_minutes: z.number().int().min(5).max(120), tasks: z.array(z.string()).min(1) })).min(1),
-  meal_finishes: z.array(z.object({ recipe_id: z.string().min(1), finish_steps: z.array(z.string()).min(1) })).min(1),
+  final_checklist: z.array(z.object({ recipe_id: z.string().min(1), label: z.string().min(1) })).min(1),
 });
 const batchSchema: z.ZodType<z.infer<typeof batchBaseSchema>, z.ZodTypeDef, unknown> = z.preprocess(
   normalizeBatchOutput,

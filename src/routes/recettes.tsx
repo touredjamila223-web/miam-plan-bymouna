@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PROTEINS, CUISINE_STYLES, APPLIANCES } from "@/lib/constants";
+import { PROTEINS, CUISINE_STYLES, APPLIANCES, COURSE_TYPES } from "@/lib/constants";
 import { RecipeCompactCard } from "@/components/recipe-compact-card";
 import { RecipeCardSkeletonGrid } from "@/components/recipe-card-skeleton";
 import { Search, X, Sparkles, Trash2, Wand2 } from "lucide-react";
@@ -46,6 +46,7 @@ function Recettes() {
   const [protein, setProtein] = useState<string>("");
   const [cuisine, setCuisine] = useState<string>("");
   const [appliance, setAppliance] = useState<string>("");
+  const [courseType, setCourseType] = useState<string>("");
   const [maxTime, setMaxTime] = useState<string>("0");
   const [sort, setSort] = useState<"recent" | "rated" | "loved" | "todo">("recent");
   const [bulk, setBulk] = useState<{ running: boolean; done: number; total: number; failed: number }>({
@@ -92,11 +93,12 @@ function Recettes() {
     protein: protein || undefined,
     cuisine: cuisine || undefined,
     appliance: appliance || undefined,
+    course_type: courseType || undefined,
     maxTime: maxTime && maxTime !== "0" ? Number(maxTime) : undefined,
     sort,
   };
   const { data, isLoading } = useQuery({
-    queryKey: ["recipes", search, protein, cuisine, appliance, maxTime, sort, !!user],
+    queryKey: ["recipes", search, protein, cuisine, appliance, courseType, maxTime, sort, !!user],
     enabled: !!user,
     queryFn: () => listMine({ data: params }),
   });
@@ -137,7 +139,7 @@ function Recettes() {
     });
   }
 
-  const hasFilters = protein || cuisine || appliance || (maxTime && maxTime !== "0");
+  const hasFilters = protein || cuisine || appliance || courseType || (maxTime && maxTime !== "0");
 
   if (location.pathname !== "/recettes") return <Outlet />;
 
@@ -172,6 +174,13 @@ function Recettes() {
           <Input className="pl-9" placeholder="Recherche : titre, ingrédient, légume..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="flex flex-wrap gap-2 items-center">
+          <Select value={courseType} onValueChange={(v) => setCourseType(v === "__all" ? "" : v)}>
+            <SelectTrigger className="w-[160px]"><SelectValue placeholder="Type"/></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all">Tous les types</SelectItem>
+              {COURSE_TYPES.map((c) => <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Select value={protein} onValueChange={(v) => setProtein(v === "__all" ? "" : v)}>
             <SelectTrigger className="w-[160px]"><SelectValue placeholder="Protéine"/></SelectTrigger>
             <SelectContent>
@@ -206,7 +215,7 @@ function Recettes() {
             </SelectContent>
           </Select>
           {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={() => { setProtein(""); setCuisine(""); setAppliance(""); setMaxTime("0"); }}>
+            <Button variant="ghost" size="sm" onClick={() => { setProtein(""); setCuisine(""); setAppliance(""); setCourseType(""); setMaxTime("0"); }}>
               <X className="w-4 h-4"/>Réinitialiser
             </Button>
           )}

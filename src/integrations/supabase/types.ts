@@ -297,6 +297,7 @@ export type Database = {
         Row: {
           appliance: string | null
           calories: number | null
+          course_type: string
           created_at: string | null
           cuisine_style: string | null
           description: string | null
@@ -316,6 +317,7 @@ export type Database = {
         Insert: {
           appliance?: string | null
           calories?: number | null
+          course_type?: string
           created_at?: string | null
           cuisine_style?: string | null
           description?: string | null
@@ -335,6 +337,7 @@ export type Database = {
         Update: {
           appliance?: string | null
           calories?: number | null
+          course_type?: string
           created_at?: string | null
           cuisine_style?: string | null
           description?: string | null

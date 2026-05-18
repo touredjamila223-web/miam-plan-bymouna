@@ -264,6 +264,13 @@ function normalizeRecipe(raw: unknown) {
     title: String(r.title ?? r.titre ?? r.name ?? r.nom ?? "Recette familiale"),
     description: String(r.description ?? r.summary ?? r.resume ?? r.résumé ?? r.title ?? r.titre ?? "Une recette familiale cohérente et savoureuse."),
     cuisine_style: String(r.cuisine_style ?? r.style_cuisine ?? r.cuisine ?? r.origin ?? r.origine ?? "familial").toLowerCase(),
+    course_type: (() => {
+      const raw = String(r.course_type ?? r.type ?? r.categorie ?? r.catégorie ?? r.course ?? "plat").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (raw.includes("entr")) return "entree";
+      if (raw.includes("soup") || raw.includes("velout") || raw.includes("potage")) return "soupe";
+      if (raw.includes("dess") || raw.includes("gateau") || raw.includes("patiss")) return "dessert";
+      return "plat";
+    })(),
     difficulty: ["facile", "moyen", "difficile"].includes(r.difficulty ?? r.difficulte ?? r.difficulté) ? (r.difficulty ?? r.difficulte ?? r.difficulté) : "facile",
     prep_time: Math.max(5, Math.round(Number(r.prep_time ?? r.temps_preparation ?? r.temps_préparation ?? r.preparation_time ?? r.total_time ?? r.temps_total ?? r.cook_time ?? 0)) || 25),
     servings: Number(r.servings ?? r.portions ?? r.personnes ?? 4),
@@ -283,6 +290,7 @@ const recipeBaseSchema = z.object({
   title: z.string(),
   description: z.string(),
   cuisine_style: z.string(),
+  course_type: z.enum(["plat", "entree", "soupe", "dessert"]).default("plat"),
   difficulty: z.enum(["facile", "moyen", "difficile"]),
   prep_time: z.number().int().min(5).max(360),
   servings: z.number().int().min(1).max(20),
@@ -333,17 +341,22 @@ function validateRecipeQuality(recipe: RecipeDto) {
     ingredientsText,
     recipe.steps.map((s) => `${s.text} ${s.appliance_settings ?? ""}`).join(" "),
   ].join(" "));
-  if (recipe.ingredients.length < 6) throw new Error("Recette trop pauvre : ingrédients insuffisants.");
-  if (recipe.steps.length < 5) throw new Error("Recette trop pauvre : étapes insuffisantes.");
+  const isPlat = recipe.course_type === "plat";
+  const minIng = isPlat ? 6 : 4;
+  const minSteps = isPlat ? 5 : 3;
+  if (recipe.ingredients.length < minIng) throw new Error("Recette trop pauvre : ingrédients insuffisants.");
+  if (recipe.steps.length < minSteps) throw new Error("Recette trop pauvre : étapes insuffisantes.");
   if (!recipe.ingredients.some((i) => /\d/.test(i.qty))) throw new Error("Recette incomplète : quantités manquantes.");
   if (!recipe.steps.some((s) => (s.appliance_settings ?? "").trim().length > 8)) {
     throw new Error("Recette incomplète : réglages appareil manquants.");
   }
-  const style = normalizedText(recipe.cuisine_style).replace(/[^a-z0-9]+/g, "");
-  const anchors = Object.entries(STYLE_ANCHORS).find(([key]) => style.includes(key.replace(/[^a-z0-9]+/g, "")))?.[1];
-  if (anchors) {
-    const hits = anchors.filter((anchor) => fullText.includes(normalizedText(anchor))).length;
-    if (hits < 2) throw new Error("Recette incohérente : marqueurs culinaires insuffisants.");
+  if (isPlat) {
+    const style = normalizedText(recipe.cuisine_style).replace(/[^a-z0-9]+/g, "");
+    const anchors = Object.entries(STYLE_ANCHORS).find(([key]) => style.includes(key.replace(/[^a-z0-9]+/g, "")))?.[1];
+    if (anchors) {
+      const hits = anchors.filter((anchor) => fullText.includes(normalizedText(anchor))).length;
+      if (hits < 2) throw new Error("Recette incohérente : marqueurs culinaires insuffisants.");
+    }
   }
   return recipe;
 }
@@ -358,10 +371,19 @@ function buildSystemPrompt(ctx: {
   restrictions: string[];
   servings: number;
   family_name?: string | null;
+  course_type?: "plat" | "entree" | "soupe" | "dessert";
 }) {
+  const courseGuides: Record<string, string> = {
+    plat: `TYPE DE RECETTE : PLAT PRINCIPAL. Construction = protéine + légumes + accompagnement (féculent ou sauce). Portion généreuse et rassasiante.`,
+    entree: `TYPE DE RECETTE : ENTRÉE. Recette légère et raffinée à servir avant le plat : salades composées, tartares, verrines, bouchées, carpaccios, œufs cocotte, terrines, bruschettas… Portion petite (~150-200 g). La "protéine" peut être "légumes", "fromage", "poisson cru", etc. Pas d'accompagnement féculent lourd.`,
+    soupe: `TYPE DE RECETTE : SOUPE OU VELOUTÉ. Base liquide (bouillon, lait, crème, lait de coco) + légumes mixés ou en morceaux. Renseigne "protein" avec "légumes" ou la protéine si présente (poulet, lentilles…). Le champ "vegetables" doit lister les légumes principaux. Sers en bol (~300-400 ml par personne). Étapes : suer les aromates, ajouter légumes + liquide, cuire, mixer si velouté, ajuster assaisonnement, garniture finale (croûtons, herbes, crème, huile parfumée).`,
+    dessert: `TYPE DE RECETTE : DESSERT. Sucré, gourmand, équilibré : crumbles, mousses, panna cotta, tartes, gâteaux, fruits rôtis, compotes, riz au lait, clafoutis, tiramisu, brownies… Renseigne "protein" avec "sans objet" ou l'ingrédient star ("chocolat", "fruits", "fromage blanc"). "vegetables" peut rester vide ou lister fruits. Ne mets PAS de protéine animale type viande/poisson. Précise températures de cuisson, repos au frais éventuel, dressage.`,
+  };
+  const courseGuide = courseGuides[ctx.course_type ?? "plat"];
   return `Tu es un chef cuisinier français créatif et précis qui assiste la famille ${
     ctx.family_name ?? ""
   }.
+${courseGuide}
 Règles ABSOLUES :
 - La recette DOIT avoir une identité culinaire claire (français, italien, oriental, asiatique, méditerranéen, tex-mex, libanais, indien, japonais...). Tous les ingrédients, épices, sauces et accompagnements doivent appartenir à ce style. Aucune association incohérente.
 - Avant d'écrire la recette, choisis mentalement un "territoire culinaire" précis et respecte son ADN :
@@ -398,7 +420,7 @@ Règles ABSOLUES :
 - La description doit expliquer le goût du plat (sauce, parfum, texture) et pas seulement répéter le titre.
 - Étapes claires, numérotées implicitement, avec timer en minutes quand il y a une cuisson minutée.
 - Tout doit être en français.
-- FORMAT DE SORTIE STRICT : un seul objet JSON avec EXACTEMENT ces clés racines en anglais : title, description, cuisine_style, difficulty, prep_time, servings, appliance, protein, vegetables, calories, ingredients, steps, missing_ingredients. Dans ingredients, chaque entrée = {"name":"...","qty":"..."}. Dans steps, chaque entrée = {"text":"...","timer_minutes":0,"appliance_settings":"..."}. N'utilise jamais les clés françaises "titre", "ingrédients", "étapes", "quantité".`;
+- FORMAT DE SORTIE STRICT : un seul objet JSON avec EXACTEMENT ces clés racines en anglais : title, description, cuisine_style, course_type, difficulty, prep_time, servings, appliance, protein, vegetables, calories, ingredients, steps, missing_ingredients. Le champ "course_type" DOIT valoir exactement "${ctx.course_type ?? "plat"}". Dans ingredients, chaque entrée = {"name":"...","qty":"..."}. Dans steps, chaque entrée = {"text":"...","timer_minutes":0,"appliance_settings":"..."}. N'utilise jamais les clés françaises "titre", "ingrédients", "étapes", "quantité".`;
 }
 
 const generateInput = z.object({
@@ -498,14 +520,20 @@ const batchInput = z.object({
   restrictions: z.array(z.string()).max(20).optional(),
   exclude: z.array(z.string()).max(40).optional(),
   hint: z.string().max(300).optional(),
+  course_type: z.enum(["plat", "entree", "soupe", "dessert"]).optional(),
 });
 
-function buildBatchPrompt(exclude: string[], hint?: string) {
-  return `Propose 3 recettes VARIÉES et savoureuses pour le repas familial.
+function buildBatchPrompt(exclude: string[], hint?: string, courseType: "plat" | "entree" | "soupe" | "dessert" = "plat") {
+  const courseLabel = { plat: "plats principaux", entree: "entrées", soupe: "soupes ou veloutés", dessert: "desserts" }[courseType];
+  const platRules = courseType === "plat"
+    ? `- PROTÉINES : pas plus de 2 recettes avec la même protéine principale parmi les 3. Varie au maximum.`
+    : `- Varie les ingrédients vedettes : pas deux recettes construites sur le même ingrédient principal.`;
+  return `Propose 3 ${courseLabel} VARIÉS et savoureux pour la famille.
 Contraintes :
 - Chaque recette doit avoir une identité culinaire claire et différente des autres autant que possible (varie les styles : ex. un français, un asiatique, un méditerranéen).
-- PROTÉINES : pas plus de 2 recettes avec la même protéine principale parmi les 3. Varie au maximum.
-- Chaque recette doit être cohérente : protéine + légumes + sauce + épices + accompagnement forment un ensemble harmonieux.
+${platRules}
+- Chaque recette doit être cohérente et bien construite pour son type (${courseLabel}).
+- "course_type" DOIT valoir "${courseType}" pour les 3 recettes.
 - Évite ces titres déjà vus : ${exclude.length ? exclude.join(", ") : "aucun"}.
 ${hint ? `- Préférence utilisateur : ${hint}` : ""}
 Réponds avec un objet { recipes: [3 recettes complètes] }.`;
@@ -519,6 +547,7 @@ async function generateBatchOnce(opts: {
   family_name: string | null;
   exclude: string[];
   hint?: string;
+  course_type?: "plat" | "entree" | "soupe" | "dessert";
 }) {
   const gateway = createLovableAiGatewayProvider(opts.apiKey);
   const model = gateway("google/gemini-2.5-flash");
@@ -529,20 +558,23 @@ async function generateBatchOnce(opts: {
       restrictions: opts.restrictions,
       servings: opts.servings,
       family_name: opts.family_name,
+      course_type: opts.course_type,
     }),
-    prompt: buildBatchPrompt(opts.exclude, opts.hint),
+    prompt: buildBatchPrompt(opts.exclude, opts.hint, opts.course_type),
     schema: batchSchema,
     maxOutputTokens: 9000,
   });
-  // Enforce max 2 same protein (post-check, deterministic trim)
-  const counts: Record<string, number> = {};
-  const kept: typeof object.recipes = [];
-  for (const r of object.recipes) {
-    const p = (r.protein ?? "").toLowerCase().trim();
-    counts[p] = (counts[p] ?? 0) + 1;
-    if (counts[p] <= 2) kept.push(r);
+  if ((opts.course_type ?? "plat") === "plat") {
+    const counts: Record<string, number> = {};
+    const kept: typeof object.recipes = [];
+    for (const r of object.recipes) {
+      const p = (r.protein ?? "").toLowerCase().trim();
+      counts[p] = (counts[p] ?? 0) + 1;
+      if (counts[p] <= 2) kept.push(r);
+    }
+    return kept;
   }
-  return kept;
+  return object.recipes;
 }
 
 export const generateRecipeBatch = createServerFn({ method: "POST" })
@@ -592,6 +624,7 @@ export const generateRecipeBatch = createServerFn({ method: "POST" })
       family_name,
       exclude,
       hint: combinedHint || undefined,
+      course_type: data.course_type,
     });
     const valid = kept.filter((r) => violatesRestrictions(r, restrictions).length === 0 && !isDuplicate(r));
     // Filtre intra-lot final : enlève les variantes proches entre elles
@@ -901,6 +934,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
           appliance?: string;
           maxTime?: number;
           sort?: "recent" | "rated" | "loved" | "todo";
+          course_type?: string;
         }
       | undefined) =>
       input ?? {},
@@ -910,7 +944,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
     let query = supabase
       .from("recipes")
       .select(
-        "id, title, photo_url, cuisine_style, difficulty, prep_time, source, description, protein, vegetables, calories, appliance",
+        "id, title, photo_url, cuisine_style, course_type, difficulty, prep_time, source, description, protein, vegetables, calories, appliance",
       )
       .eq("owner_id", userId)
       .limit(120);
@@ -924,6 +958,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
     if (data?.protein) query = query.eq("protein", data.protein);
     if (data?.cuisine) query = query.eq("cuisine_style", data.cuisine);
     if (data?.appliance) query = query.eq("appliance", data.appliance);
+    if (data?.course_type) query = query.eq("course_type", data.course_type);
     if (data?.maxTime) query = query.lte("prep_time", data.maxTime);
     const { data: rows, error } = await query.order("created_at", { ascending: false });
     if (error) throw new Error(error.message);

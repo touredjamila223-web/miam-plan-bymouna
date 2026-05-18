@@ -341,17 +341,22 @@ function validateRecipeQuality(recipe: RecipeDto) {
     ingredientsText,
     recipe.steps.map((s) => `${s.text} ${s.appliance_settings ?? ""}`).join(" "),
   ].join(" "));
-  if (recipe.ingredients.length < 6) throw new Error("Recette trop pauvre : ingrédients insuffisants.");
-  if (recipe.steps.length < 5) throw new Error("Recette trop pauvre : étapes insuffisantes.");
+  const isPlat = recipe.course_type === "plat";
+  const minIng = isPlat ? 6 : 4;
+  const minSteps = isPlat ? 5 : 3;
+  if (recipe.ingredients.length < minIng) throw new Error("Recette trop pauvre : ingrédients insuffisants.");
+  if (recipe.steps.length < minSteps) throw new Error("Recette trop pauvre : étapes insuffisantes.");
   if (!recipe.ingredients.some((i) => /\d/.test(i.qty))) throw new Error("Recette incomplète : quantités manquantes.");
   if (!recipe.steps.some((s) => (s.appliance_settings ?? "").trim().length > 8)) {
     throw new Error("Recette incomplète : réglages appareil manquants.");
   }
-  const style = normalizedText(recipe.cuisine_style).replace(/[^a-z0-9]+/g, "");
-  const anchors = Object.entries(STYLE_ANCHORS).find(([key]) => style.includes(key.replace(/[^a-z0-9]+/g, "")))?.[1];
-  if (anchors) {
-    const hits = anchors.filter((anchor) => fullText.includes(normalizedText(anchor))).length;
-    if (hits < 2) throw new Error("Recette incohérente : marqueurs culinaires insuffisants.");
+  if (isPlat) {
+    const style = normalizedText(recipe.cuisine_style).replace(/[^a-z0-9]+/g, "");
+    const anchors = Object.entries(STYLE_ANCHORS).find(([key]) => style.includes(key.replace(/[^a-z0-9]+/g, "")))?.[1];
+    if (anchors) {
+      const hits = anchors.filter((anchor) => fullText.includes(normalizedText(anchor))).length;
+      if (hits < 2) throw new Error("Recette incohérente : marqueurs culinaires insuffisants.");
+    }
   }
   return recipe;
 }

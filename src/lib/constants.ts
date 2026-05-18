@@ -38,9 +38,13 @@ export const CUISINE_STYLES = [
 
 export const PROTEINS = [
   "poulet",
+  "dinde",
+  "veau",
   "boeuf",
   "agneau",
   "porc",
+  "canard",
+  "lapin",
   "poisson",
   "fruits de mer",
   "oeufs",

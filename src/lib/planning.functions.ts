@@ -398,11 +398,18 @@ export const listShopping = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     const rows = data ?? [];
     const validSet = new Set<string>(CATEGORIES);
-    const toFix = rows.filter((r: any) => !r.category || !validSet.has(r.category));
+    // Re-classify: if our rule-based classifier confidently knows the item,
+    // trust it over whatever was stored (AI or legacy data).
+    const toFix = rows.filter((r: any) => {
+      if (!r.category || !validSet.has(r.category)) return true;
+      const guess = classifyItem(r.item ?? "");
+      return guess !== "Autres" && guess !== r.category;
+    });
     if (toFix.length) {
       await Promise.all(
         toFix.map((r: any) => {
-          const newCat = classifyItem(r.item ?? "");
+          const guess = classifyItem(r.item ?? "");
+          const newCat = guess !== "Autres" ? guess : (validSet.has(r.category) ? r.category : "Autres");
           r.category = newCat;
           return supabase.from("shopping_list").update({ category: newCat }).eq("id", r.id);
         }),
@@ -688,13 +695,18 @@ FORMAT STRICT : retourne uniquement {"items":[{"item":"...","qty":"...","categor
     });
 
     await supabase.from("shopping_list").delete().eq("user_id", userId).eq("source", "plan");
-    const rows = object.items.map((i) => ({
-      user_id: userId,
-      item: i.item,
-      qty: i.qty,
-      category: i.category === "Autres" || i.category === "Epicerie salee" ? classifyItem(i.item) : i.category,
-      source: "plan",
-    }));
+    const rows = object.items.map((i) => {
+      const guess = classifyItem(i.item);
+      // Toujours préférer notre classifieur quand il reconnaît l'aliment
+      const category = guess !== "Autres" ? guess : i.category;
+      return {
+        user_id: userId,
+        item: i.item,
+        qty: i.qty,
+        category,
+        source: "plan",
+      };
+    });
     if (rows.length) await supabase.from("shopping_list").insert(rows);
     return object.items;
   });

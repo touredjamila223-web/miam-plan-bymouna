@@ -921,8 +921,8 @@ export const listRecipes = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false })
       .limit(60);
     if (data?.search) query = query.ilike("title", `%${data.search}%`);
-    if (data?.protein) query = query.eq("protein", data.protein);
-    if (data?.cuisine) query = query.eq("cuisine_style", data.cuisine);
+    if (data?.protein) query = query.ilike("protein", `%${data.protein}%`);
+    if (data?.cuisine) query = query.ilike("cuisine_style", `%${data.cuisine}%`);
     if (data?.maxTime) query = query.lte("prep_time", data.maxTime);
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
@@ -961,8 +961,8 @@ export const listMyRecipes = createServerFn({ method: "GET" })
         `title.ilike.${q},description.ilike.${q},protein.ilike.${q},cuisine_style.ilike.${q}`,
       );
     }
-    if (data?.protein) query = query.eq("protein", data.protein);
-    if (data?.cuisine) query = query.eq("cuisine_style", data.cuisine);
+    if (data?.protein) query = query.ilike("protein", `%${data.protein}%`);
+    if (data?.cuisine) query = query.ilike("cuisine_style", `%${data.cuisine}%`);
     if (data?.appliance) query = query.eq("appliance", data.appliance);
     if (data?.course_type) query = query.eq("course_type", data.course_type);
     if (data?.maxTime) query = query.lte("prep_time", data.maxTime);

@@ -470,12 +470,35 @@ export const addShoppingItem = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const category = data.category ?? classifyItem(data.item);
+    // Détection de doublon : si un article avec la même clé normalisée
+    // existe déjà dans la même catégorie (et non coché), on fusionne les quantités.
+    const { data: existing } = await supabase
+      .from("shopping_list")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("checked", false);
+    const targetKey = normalizeItemKey(data.item);
+    const dup = (existing ?? []).find(
+      (r: any) => normalizeItemKey(r.item ?? "") === targetKey && (r.category ?? "Autres") === category,
+    );
+    if (dup) {
+      const mergedQty = mergeQty(dup.qty, data.qty ?? "");
+      const { data: updated, error: updErr } = await supabase
+        .from("shopping_list")
+        .update({ qty: mergedQty || null })
+        .eq("id", dup.id)
+        .select()
+        .single();
+      if (updErr) throw new Error(updErr.message);
+      return updated;
+    }
     const { data: row, error } = await supabase
       .from("shopping_list")
       .insert({
         user_id: userId,
         item: data.item,
-        category: data.category ?? classifyItem(data.item),
+        category,
         qty: data.qty ?? null,
         source: "manual",
       })
@@ -523,6 +546,56 @@ export const clearAllShopping = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await supabase.from("shopping_list").delete().eq("user_id", userId);
     return { ok: true };
+  });
+
+// Fusionne les doublons existants dans la liste de courses.
+// Regroupe par (catégorie, clé normalisée), additionne les quantités,
+// garde la ligne la plus ancienne, supprime les autres.
+export const consolidateShopping = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data: rows, error } = await supabase
+      .from("shopping_list")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("checked", false)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    const groups = new Map<string, any[]>();
+    for (const r of rows ?? []) {
+      const cat = (r.category && (CATEGORIES as readonly string[]).includes(r.category))
+        ? r.category
+        : classifyItem(r.item ?? "");
+      const key = `${cat}::${normalizeItemKey(r.item ?? "")}`;
+      (groups.get(key) ?? groups.set(key, []).get(key)!).push({ ...r, category: cat });
+    }
+    let merged = 0;
+    const updates: Promise<any>[] = [];
+    const toDelete: string[] = [];
+    for (const arr of groups.values()) {
+      if (arr.length <= 1) {
+        // Toujours réécrire la catégorie si elle a changé
+        const r = arr[0];
+        if (r.category !== (rows!.find((x: any) => x.id === r.id)?.category)) {
+          updates.push(supabase.from("shopping_list").update({ category: r.category }).eq("id", r.id));
+        }
+        continue;
+      }
+      const [keep, ...rest] = arr;
+      let qty = keep.qty ?? "";
+      for (const r of rest) qty = mergeQty(qty, r.qty ?? "");
+      updates.push(
+        supabase.from("shopping_list").update({ qty: qty || null, category: keep.category }).eq("id", keep.id),
+      );
+      toDelete.push(...rest.map((r) => r.id));
+      merged += rest.length;
+    }
+    if (toDelete.length) {
+      updates.push(supabase.from("shopping_list").delete().in("id", toDelete));
+    }
+    await Promise.all(updates);
+    return { merged, removed: toDelete.length };
   });
 
 function normalizeShoppingOutput(raw: unknown) {

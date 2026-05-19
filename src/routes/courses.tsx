@@ -11,9 +11,10 @@ import {
   clearCheckedShopping,
   clearAllShopping,
   generateShoppingFromPlan,
+  consolidateShopping,
 } from "@/lib/planning.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { ShoppingCart, Plus, X, Sparkles, Trash2, FileDown, RotateCcw } from "lucide-react";
+import { ShoppingCart, Plus, X, Sparkles, Trash2, FileDown, RotateCcw, Combine } from "lucide-react";
 import { generateShoppingPdf } from "@/lib/shopping-pdf";
 import {
   AlertDialog,
@@ -40,6 +41,29 @@ function startOfWeek(d: Date) {
   return x;
 }
 
+const CATEGORY_ORDER = [
+  "Fruits",
+  "Legumes",
+  "Viandes",
+  "Poissons & fruits de mer",
+  "Charcuterie",
+  "Cremerie & oeufs",
+  "Fromages",
+  "Pates, riz & feculents",
+  "Conserves",
+  "Sauces & condiments",
+  "Herbes & epices",
+  "Huiles & vinaigres",
+  "Epicerie salee",
+  "Epicerie sucree",
+  "Boulangerie",
+  "Surgeles",
+  "Boissons",
+  "Aperitif",
+  "Hygiene & entretien",
+  "Autres",
+];
+
 function CoursesPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -50,6 +74,7 @@ function CoursesPage() {
   const clearChecked = useServerFn(clearCheckedShopping);
   const clearAll = useServerFn(clearAllShopping);
   const gen = useServerFn(generateShoppingFromPlan);
+  const dedupe = useServerFn(consolidateShopping);
 
   const { data: items } = useQuery({
     queryKey: ["shopping"],
@@ -96,6 +121,17 @@ function CoursesPage() {
     qc.invalidateQueries({ queryKey: ["shopping"] });
   }
 
+  async function runDedupe() {
+    try {
+      const r = await dedupe();
+      if (r.removed > 0) toast.success(`${r.removed} doublon${r.removed > 1 ? "s" : ""} fusionné${r.removed > 1 ? "s" : ""}`);
+      else toast.success("Aucun doublon détecté");
+      qc.invalidateQueries({ queryKey: ["shopping"] });
+    } catch (e: any) {
+      toast.error(e.message ?? "Erreur");
+    }
+  }
+
   function exportPdf() {
     if (!items?.length) {
       toast.error("Liste vide");
@@ -119,6 +155,11 @@ function CoursesPage() {
     const cat = it.category || "Autres";
     (grouped[cat] = grouped[cat] || []).push(it);
   }
+  const orderedCats = Object.keys(grouped).sort((a, b) => {
+    const ia = CATEGORY_ORDER.indexOf(a);
+    const ib = CATEGORY_ORDER.indexOf(b);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
 
   return (
     <div className="space-y-6">
@@ -129,6 +170,7 @@ function CoursesPage() {
         </div>
         <div className="flex gap-2">
           <button onClick={runGenerate} disabled={loading} className="bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm flex items-center gap-2 disabled:opacity-50"><Sparkles className="w-4 h-4" />{loading ? "..." : "Depuis le planning"}</button>
+          <button onClick={runDedupe} className="border border-border px-3 py-2 rounded-full text-sm flex items-center gap-2 hover:bg-accent/20"><Combine className="w-4 h-4" />Fusionner doublons</button>
           <button onClick={exportPdf} className="border border-border px-3 py-2 rounded-full text-sm flex items-center gap-2 hover:bg-accent/20"><FileDown className="w-4 h-4" />PDF</button>
           <button onClick={clearDone} className="border border-border px-3 py-2 rounded-full text-sm flex items-center gap-2 hover:bg-accent/20"><Trash2 className="w-4 h-4" />Vider cochés</button>
           <AlertDialog>
@@ -155,11 +197,11 @@ function CoursesPage() {
       </form>
 
       <div className="space-y-5">
-        {Object.entries(grouped).map(([cat, arr]) => (
+        {orderedCats.map((cat) => (
           <section key={cat}>
             <h2 className="text-sm uppercase tracking-wide text-muted-foreground mb-2 font-medium">{cat}</h2>
             <ul className="bg-card border border-border rounded-2xl divide-y divide-border">
-              {arr.map((it) => (
+              {grouped[cat].map((it) => (
                 <li key={it.id} className="flex items-center gap-3 px-4 py-3 group">
                   <input type="checkbox" checked={!!it.checked} onChange={(e) => toggleMut.mutate({ id: it.id, checked: e.target.checked })} className="w-5 h-5 accent-primary" />
                   <div className={`flex-1 ${it.checked ? "line-through text-muted-foreground" : ""}`}>

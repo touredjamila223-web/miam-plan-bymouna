@@ -553,8 +553,12 @@ export const clearAllShopping = createServerFn({ method: "POST" })
 // garde la ligne la plus ancienne, supprime les autres.
 export const consolidateShopping = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input) =>
+    z.object({ dryRun: z.boolean().optional() }).optional().parse(input ?? {}),
+  )
+  .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const dryRun = !!data?.dryRun;
     const { data: rows, error } = await supabase
       .from("shopping_list")
       .select("*")
@@ -570,14 +574,20 @@ export const consolidateShopping = createServerFn({ method: "POST" })
       const key = `${cat}::${normalizeItemKey(r.item ?? "")}`;
       (groups.get(key) ?? groups.set(key, []).get(key)!).push({ ...r, category: cat });
     }
-    let merged = 0;
+    const previewGroups: Array<{
+      item: string;
+      category: string;
+      mergedQty: string;
+      sources: Array<{ item: string; qty: string | null }>;
+    }> = [];
     const updates: Array<PromiseLike<any>> = [];
     const toDelete: string[] = [];
+    let merged = 0;
     for (const arr of groups.values()) {
       if (arr.length <= 1) {
-        // Toujours réécrire la catégorie si elle a changé
         const r = arr[0];
-        if (r.category !== (rows!.find((x: any) => x.id === r.id)?.category)) {
+        const original = rows!.find((x: any) => x.id === r.id);
+        if (!dryRun && original && r.category !== original.category) {
           updates.push(supabase.from("shopping_list").update({ category: r.category }).eq("id", r.id));
         }
         continue;
@@ -585,17 +595,28 @@ export const consolidateShopping = createServerFn({ method: "POST" })
       const [keep, ...rest] = arr;
       let qty = keep.qty ?? "";
       for (const r of rest) qty = mergeQty(qty, r.qty ?? "");
-      updates.push(
-        supabase.from("shopping_list").update({ qty: qty || null, category: keep.category }).eq("id", keep.id),
-      );
-      toDelete.push(...rest.map((r) => r.id));
+      previewGroups.push({
+        item: keep.item,
+        category: keep.category,
+        mergedQty: qty,
+        sources: arr.map((r) => ({ item: r.item, qty: r.qty ?? null })),
+      });
       merged += rest.length;
+      if (!dryRun) {
+        updates.push(
+          supabase.from("shopping_list").update({ qty: qty || null, category: keep.category }).eq("id", keep.id),
+        );
+        toDelete.push(...rest.map((r) => r.id));
+      }
+    }
+    if (dryRun) {
+      return { dryRun: true as const, groups: previewGroups, removed: merged };
     }
     if (toDelete.length) {
       updates.push(supabase.from("shopping_list").delete().in("id", toDelete));
     }
     await Promise.all(updates);
-    return { merged, removed: toDelete.length };
+    return { dryRun: false as const, merged, removed: toDelete.length, groups: previewGroups };
   });
 
 function normalizeShoppingOutput(raw: unknown) {

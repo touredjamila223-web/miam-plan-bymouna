@@ -511,17 +511,9 @@ Règles ABSOLUES :
     ctx.restrictions.length ? ctx.restrictions.join(", ") : "aucune"
   }.
 - Portions : ${ctx.servings} personnes.
-- Appareil de cuisson : ${ctx.appliance}. Pour CHAQUE étape de cuisson, renseigne le champ "appliance_settings" avec **le mode ET l'intensité précise** pour guider l'utilisateur :
-  * Cookeo Smart Wifi : nomme EXACTEMENT le programme officiel : "Rissolage" (et non "Dorer"), "Mijotage", "Cuisson sous pression", "Cuisson vapeur", "Réchauffage", "Maintien au chaud", "Manuel". Pour Rissolage, Mijotage et Cuisson sous pression, précise TOUJOURS l'intensité : **doux**, **moyen** ou **fort** (ex : "Rissolage intensité moyen 5 min", "Cuisson sous pression intensité fort 15 min", "Mijotage intensité doux 25 min"). Indique le couvercle (ouvert pour rissolage, fermé verrouillé pour pression) et le liquide minimum requis pour la pression (≥ 250 ml).
-  * Monsieur Cuisine Smart (Lidl) : précise programme/mode (Pétrissage, Mijotage, Vapeur Varoma, Sauté, Sous-vide, Fermentation, ou Manuel), **vitesse 1 à 10** (ou Turbo), **température en °C** (37–130 °C, ou "Varoma" pour la vapeur), **durée**, et **sens des pales** (normal ou inverse pour préserver les morceaux). Ex : "Mode Sauté, vitesse 1 sens inverse, 120 °C, 8 min" ou "Vapeur Varoma, vitesse 2, 20 min".
-  * Airfryer : température °C (160–200 °C) + durée + "secouer le panier à mi-cuisson" + préchauffage 3 min si applicable.
-  * Four : préchauffage + mode (chaleur tournante / statique / grill) + température °C + position grille (bas / milieu / haut) + durée.
-  * Cocotte-minute : feu vif jusqu'à sifflement de la soupape, puis feu doux + durée après mise en pression + libération vapeur (rapide / naturelle).
-  * Poêle : intensité feu (vif 8/9, moyen 5/6, doux 3/4) + matière grasse + durée par face.
-  * Wok : feu très vif (9/9) + huile fumante + saisie courte par poignée d'ingrédients (1–2 min).
-  * Casserole : intensité (vif/moyen/doux + chiffre 1–9 si plaque) + couvert ou non + durée.
-  * Plancha : température (180–250 °C) + durée par face.
-  N'écris JAMAIS "cuire à feu moyen" sans préciser l'intensité chiffrée ou la température. N'invente JAMAIS de programme inexistant (ex : "Dorer" sur Cookeo Smart Wifi = utilise "Rissolage").
+- Appareil de cuisson IMPOSÉ : ${ctx.appliance}. Pour CHAQUE étape de cuisson, renseigne "appliance_settings" en respectant STRICTEMENT le guide officiel ci-dessous (mode/programme exact, intensité réelle, durée). N'invente JAMAIS un mode qui n'existe pas (ex : "Dorer" sur Cookeo = utilise "Rissolage"). N'écris JAMAIS "cuire à feu moyen" sans intensité chiffrée ou température précise.
+  GUIDE OFFICIEL DE L'APPAREIL :
+  ${applianceGuideBlock(ctx.appliance)}
 - ÉTAPES DÉTAILLÉES : produis 6 à 10 étapes, chacune en 1–3 phrases. Décris le geste (couper en cubes de 2 cm, émincer finement, mélanger jusqu'à liaison…), l'indice visuel/sonore de réussite (jusqu'à coloration dorée, jusqu'à ce que l'oignon devienne translucide, jusqu'au sifflement…), et toute astuce utile (déglacer, gratter les sucs, racler les bords de la cuve…). Évite les étapes vagues type "faire cuire" sans contexte.
 - La liste d'ingrédients doit contenir la protéine/légumineuse principale, 2 à 4 légumes cohérents, la base aromatique, les épices/herbes du style, le liquide ou la sauce, l'accompagnement si nécessaire. Minimum 7 ingrédients utiles hors sel/poivre/eau.
 - La description doit expliquer le goût du plat (sauce, parfum, texture) et pas seulement répéter le titre.

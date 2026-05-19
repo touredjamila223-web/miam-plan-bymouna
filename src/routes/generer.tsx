@@ -89,6 +89,7 @@ function Generer() {
   }
 
   async function go() {
+    if (!appliance) return toast.error("Choisis un appareil avant de générer.");
     setLoading(true);
     setRecipes([]);
     setSelected({});

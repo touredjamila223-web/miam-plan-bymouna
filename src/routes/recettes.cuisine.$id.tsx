@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { getRecipe } from "@/lib/recipes.functions";
 import { recordCooked } from "@/lib/cooking.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { ChevronLeft, ChevronRight, X, Play, Pause, RotateCcw, Star, Heart, Check, Volume2, VolumeX } from "lucide-react";
+import { scaleQty } from "@/lib/scale";
+import { ChevronLeft, ChevronRight, X, Play, Pause, RotateCcw, Star, Heart, Check, Volume2, VolumeX, Users, Minus, Plus, ListChecks } from "lucide-react";
 
 export const Route = createFileRoute("/recettes/cuisine/$id")({
   head: () => ({ meta: [{ title: "Mode cuisine — MiamPlan" }] }),
@@ -47,6 +48,12 @@ function CookingMode() {
   const steps = ((r?.steps as any[]) ?? []);
   const step = steps[stepIdx];
   const total = steps.length;
+  const baseServings = Math.max(1, Number(r?.servings ?? 4));
+  const [servings, setServings] = useState(baseServings);
+  const [showIngs, setShowIngs] = useState(false);
+  useEffect(() => { setServings(baseServings); }, [baseServings]);
+  const ratio = servings / baseServings;
+  const ingredients = (r?.ingredients as any[]) ?? [];
 
   // Wake lock
   useEffect(() => {
@@ -140,7 +147,15 @@ function CookingMode() {
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <Link to="/recettes/$id" params={{ id }} className="p-2 rounded-lg hover:bg-accent/30"><X className="w-5 h-5" /></Link>
-        <div className="text-sm text-muted-foreground">Étape {stepIdx + 1} / {total}</div>
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-muted-foreground">Étape {stepIdx + 1} / {total}</div>
+          <div className="flex items-center gap-1 bg-muted rounded-full p-1">
+            <button type="button" onClick={() => setServings((s) => Math.max(1, s - 1))} disabled={servings <= 1} className="w-7 h-7 rounded-full bg-card border border-border flex items-center justify-center disabled:opacity-40" aria-label="-1 pers."><Minus className="w-3.5 h-3.5"/></button>
+            <span className="text-xs font-semibold min-w-[3rem] text-center tabular-nums inline-flex items-center justify-center gap-1"><Users className="w-3 h-3"/>{servings}</span>
+            <button type="button" onClick={() => setServings((s) => Math.min(20, s + 1))} disabled={servings >= 20} className="w-7 h-7 rounded-full bg-card border border-border flex items-center justify-center disabled:opacity-40" aria-label="+1 pers."><Plus className="w-3.5 h-3.5"/></button>
+          </div>
+          <button onClick={() => setShowIngs(true)} className="p-2 rounded-lg hover:bg-accent/30" aria-label="Voir les ingrédients" title="Ingrédients"><ListChecks className="w-5 h-5"/></button>
+        </div>
         <button
           onClick={() => {
             const next = !voiceOn;
@@ -205,6 +220,28 @@ function CookingMode() {
       </div>
 
       {showRating && <RatingModal onClose={() => setShowRating(false)} onSubmit={(v) => recordMut.mutate(v)} pending={recordMut.isPending} />}
+
+      {showIngs && (
+        <div className="fixed inset-0 bg-black/60 z-[70] flex items-end md:items-center justify-center p-4" onClick={() => setShowIngs(false)}>
+          <div className="bg-card rounded-3xl max-w-md w-full p-6 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold" style={{ fontFamily: "Fraunces, serif" }}>Ingrédients · {servings} pers.</h3>
+              <button onClick={() => setShowIngs(false)} className="p-1 rounded hover:bg-accent/30"><X className="w-4 h-4"/></button>
+            </div>
+            {servings !== baseServings && (
+              <p className="text-xs text-muted-foreground mb-2">Quantités ajustées (recette de base : {baseServings} pers.)</p>
+            )}
+            <ul className="space-y-2 text-sm">
+              {ingredients.map((ing: any, i: number) => (
+                <li key={i} className="flex justify-between gap-2 border-b border-border/40 pb-1.5">
+                  <span>{ing.name}</span>
+                  <span className="text-muted-foreground tabular-nums">{scaleQty(ing.qty, ratio)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

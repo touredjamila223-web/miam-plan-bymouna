@@ -123,16 +123,33 @@ function CoursesPage() {
     qc.invalidateQueries({ queryKey: ["shopping"] });
   }
 
-  async function runDedupe() {
+  async function runDedupePreview() {
     try {
-      const r = await dedupe();
-      if (r.removed > 0) toast.success(`${r.removed} doublon${r.removed > 1 ? "s" : ""} fusionné${r.removed > 1 ? "s" : ""}`);
-      else toast.success("Aucun doublon détecté");
-      qc.invalidateQueries({ queryKey: ["shopping"] });
+      const r = await dedupe({ data: { dryRun: true } });
+      if (!r.groups.length) {
+        toast.success("Aucun doublon détecté");
+        return;
+      }
+      setPreview({ groups: r.groups, removed: r.removed });
     } catch (e: any) {
       toast.error(e.message ?? "Erreur");
     }
   }
+
+  async function applyDedupe() {
+    setApplying(true);
+    try {
+      const r = await dedupe({ data: { dryRun: false } });
+      toast.success(`${r.removed} doublon${r.removed > 1 ? "s" : ""} fusionné${r.removed > 1 ? "s" : ""}`);
+      setPreview(null);
+      qc.invalidateQueries({ queryKey: ["shopping"] });
+    } catch (e: any) {
+      toast.error(e.message ?? "Erreur");
+    } finally {
+      setApplying(false);
+    }
+  }
+
 
   function exportPdf() {
     if (!items?.length) {

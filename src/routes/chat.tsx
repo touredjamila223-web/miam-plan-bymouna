@@ -264,13 +264,27 @@ function Chat() {
                       </div>
                     );
                   }
+                  const recipes = Array.isArray(p.output?.recipes)
+                    ? p.output.recipes
+                    : p.output
+                      ? [p.output]
+                      : [];
                   return (
-                    <RecipeProposalCard
-                      key={i}
-                      recipe={p.output}
-                      appliance={p.input?.appliance}
-                      onAnother={askAnother}
-                    />
+                    <div key={i} className="space-y-3">
+                      {recipes.length > 1 && (
+                        <div className="text-xs text-muted-foreground">
+                          Voici {recipes.length} propositions — choisis celle qui te plaît, ou demande-en d'autres.
+                        </div>
+                      )}
+                      {recipes.map((r: any, idx: number) => (
+                        <RecipeProposalCard
+                          key={idx}
+                          recipe={r}
+                          appliance={p.input?.appliance}
+                          onAnother={askAnother}
+                        />
+                      ))}
+                    </div>
                   );
                 }
                 if (p.state === "output-error") {
@@ -284,7 +298,7 @@ function Chat() {
                   <div key={i} className="bg-card border border-border rounded-2xl p-4 space-y-2">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                      Leia mijote ta recette
+                      Leia mijote 3 recettes
                       {p.input?.appliance && ` au ${applianceLabel(p.input.appliance)}`}…
                     </div>
                     <Skeleton className="h-4 w-3/4" />

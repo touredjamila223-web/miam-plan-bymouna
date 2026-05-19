@@ -15,25 +15,25 @@ export const APPLIANCES = [
 // Sert de référence STRICTE à l'IA pour rédiger les `appliance_settings` de chaque étape.
 export const APPLIANCE_GUIDE: Record<string, string> = {
   cookeo:
-    "Cookeo Smart Wifi — Modes : Dorer (sans couvercle, équivalent feu vif), Mijoter (sans pression, doux), Cuisson sous pression (couvercle fermé, valve fermée), Cuisson vapeur (panier + 200 ml d'eau), Réchauffer, Maintien au chaud. Toujours préciser le mode exact + durée en minutes. Ex : « Mode Dorer 5 min », « Mode Pression 12 min », « Mode Mijoter 25 min couvercle ouvert ».",
+    "Cookeo Smart Wifi — Programmes OFFICIELS (jamais inventer d'autres noms) : « Rissolage » (couvercle ouvert, équivalent saisie/dorure), « Mijotage » (couvercle ouvert, sans pression), « Cuisson sous pression » (couvercle fermé verrouillé, valve fermée, ≥ 250 ml de liquide obligatoire), « Cuisson vapeur » (panier vapeur + 200 ml d'eau), « Réchauffage », « Maintien au chaud », « Manuel ». Pour Rissolage, Mijotage et Cuisson sous pression, préciser TOUJOURS l'intensité parmi **doux**, **moyen** ou **fort** + la durée en minutes + l'état du couvercle. Exemples valides : « Rissolage intensité moyen 5 min, couvercle ouvert », « Cuisson sous pression intensité fort 15 min, couvercle fermé verrouillé », « Mijotage intensité doux 25 min, couvercle ouvert ». INTERDIT : « Dorer », « Pression » seul, ou tout libellé non officiel.",
   "monsieur-cuisine":
-    "Monsieur Cuisine Smart — Réglages : Température 37 à 130 °C (par paliers de 5 °C, 130 °C = ébullition rapide, ✱ Varoma pour la vapeur), Vitesse 1 à 10 (1-3 mijotage, 4-6 mélange, 7-10 mixage), Sens de rotation inverse pour préserver les morceaux, Mode Pétrissage (icône épi), Mode Sous Vide. Toujours préciser Température + Vitesse + Durée + (Sens inverse si besoin). Ex : « 100 °C / vitesse 1 / 15 min / sens inverse ».",
+    "Monsieur Cuisine Smart (Lidl) — Programmes/modes : Pétrissage (icône épi), Mijotage, Vapeur Varoma, Sauté, Sous-vide, Fermentation, ou Manuel. Réglages à préciser à CHAQUE étape : **mode** + **vitesse 1 à 10** (1-3 mijotage, 4-6 mélange, 7-10 mixage, ou Turbo) + **température en °C** (37–130 °C par paliers de 5 °C, ou « Varoma » pour la vapeur) + **durée** + **sens des pales** (normal ou **inverse** pour préserver les morceaux). Exemples : « Mode Sauté, vitesse 1 sens inverse, 120 °C, 8 min », « Vapeur Varoma, vitesse 2, 20 min », « Pétrissage 3 min ».",
   airfryer:
-    "Airfryer — Plage 80 à 200 °C. Toujours préciser Température (°C) + Durée (min) + secouer à mi-cuisson si pertinent. Pas d'huile ou très peu (1 c. à c.). Ex : « 180 °C / 15 min, secouer à 8 min ».",
+    "Airfryer — Plage 80 à 200 °C (cuisson efficace en général entre 160 et 200 °C). Toujours préciser **température (°C)** + **durée (min)** + « secouer le panier à mi-cuisson » si pertinent + préchauffage 3 min si nécessaire. Pas d'huile ou très peu (1 c. à c.). Ex : « 180 °C, 15 min, secouer à 8 min, préchauffé 3 min ».",
   "cocotte-minute":
-    "Cocotte-minute — Étapes : faire revenir à découvert sur feu vif 7-8, puis fermer, monter en pression (sifflement), baisser à feu 3-4 et compter la durée sous pression. Toujours préciser feu (1-9) + durée sous pression. Ex : « Feu 7 pour saisir 4 min, puis pression feu 3 pendant 20 min ».",
+    "Cocotte-minute — Séquence : saisir à découvert sur feu vif (7-8/9), fermer, monter en pression (jusqu'au sifflement de la soupape), baisser à feu doux (3-4/9) et compter la durée SOUS pression. Préciser feu (1-9) + durée sous pression + libération vapeur (rapide sous l'eau / naturelle). Ex : « Feu 7 pour saisir 4 min, puis pression feu 3 pendant 20 min, libération naturelle ».",
   four:
-    "Four traditionnel — Modes : Chaleur tournante, Chaleur statique (sole + voûte), Gril, Sole seule. Plage 50-250 °C. Préciser Mode + Température + Position de la grille (bas/milieu/haut) + Durée. Ex : « Chaleur tournante 200 °C, grille au milieu, 25 min ».",
+    "Four traditionnel — Modes : Chaleur tournante, Chaleur statique (sole + voûte), Gril, Sole seule. Plage 50-250 °C. Toujours préciser : préchauffage (température et durée) + **mode** + **température (°C)** + **position de la grille** (bas/milieu/haut) + **durée**. Ex : « Préchauffer chaleur tournante 200 °C, enfourner grille au milieu, 25 min ».",
   poele:
-    "Poêle — Feu 1 (très doux) à 9 (très vif). Préciser feu + couvercle (ouvert/fermé) + durée. Ex : « Feu 7, sans couvercle, 5 min de chaque côté ».",
+    "Poêle — Intensité feu : vif 8-9/9, moyen 5-6/9, doux 3-4/9. Préciser **intensité chiffrée** + **matière grasse** + **couvercle (ouvert/fermé)** + **durée par face** si saisie. Ex : « Feu vif 8/9, 1 c. à s. d'huile, sans couvercle, 3 min par face » ou « Feu moyen 5/9, couvert, 12 min ».",
   casserole:
-    "Casserole — Feu 1 à 9. Préciser feu + couvercle + durée. Pour mijoter : feu 3-4 couvert. Pour réduire : feu 6-7 à découvert. Ex : « Feu 4, couvercle entrouvert, 30 min ».",
+    "Casserole — Intensité feu (1-9) : mijoter 3-4 couvert, frémir 4-5, réduire 6-7 découvert, bouillir 8-9. Préciser **intensité chiffrée** + **couvercle** + **durée**. Ex : « Feu 4/9, couvercle entrouvert, 30 min », « Feu 7/9 découvert pour réduire 8 min ».",
   plancha:
-    "Plancha — Température 200-280 °C. Préciser température + durée par face. Ex : « Plancha 250 °C, 3 min par face ».",
+    "Plancha — Température 180-280 °C. Préciser **température (°C)** + **durée par face** + matière grasse éventuelle. Ex : « Plancha 250 °C, 3 min par face, filet d'huile ».",
   "robot-patissier":
-    "Robot pâtissier — Accessoires : Feuille (mélanger), Fouet (monter/foisonner), Crochet (pétrir). Vitesses 1 à 10 (1-2 incorporer, 4 mélanger, 6-8 monter, 10 rare). Préciser Accessoire + Vitesse + Durée. Ex : « Crochet, vitesse 2, 8 min ».",
+    "Robot pâtissier — Accessoires : **Feuille** (mélanger crèmes/pâtes molles), **Fouet** (monter/foisonner blancs/crème), **Crochet** (pétrir pâtes levées). Vitesses 1 à 10 (1-2 incorporer, 4 mélanger, 6-8 monter, 10 rare). Préciser **accessoire** + **vitesse** + **durée**. Ex : « Crochet, vitesse 2, 8 min », « Fouet, vitesse 8, jusqu'à bec d'oiseau (3-4 min) ».",
   mixeur:
-    "Mixeur / Blender — Vitesses 1 à 10 (ou Pulse). Préciser Vitesse + Durée. Ex : « Vitesse 8, 45 sec, par à-coups ».",
+    "Mixeur / Blender — Vitesses 1 à 10 (ou **Pulse** par à-coups). Préciser **vitesse** + **durée** + texture cible. Ex : « Vitesse 8, 45 sec, jusqu'à texture lisse », « Pulse x5 pour hacher grossièrement ».",
 };
 
 export const DIETARY_RESTRICTIONS = [

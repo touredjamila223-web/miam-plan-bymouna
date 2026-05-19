@@ -182,6 +182,7 @@ const fridgeRecipeBaseSchema = z.object({
   steps: z.array(z.object({ text: z.string().min(4), timer_minutes: z.number().int().min(0).optional(), appliance_settings: z.string().optional() })).min(3),
   missing_ingredients: z.array(z.string()).default([]),
   feasibility: z.number().int().min(0).max(100).optional(),
+  course_type: z.enum(["plat", "entree", "soupe", "dessert"]).default("plat"),
 });
 type FridgeRecipe = z.infer<typeof fridgeRecipeBaseSchema>;
 const fridgeRecipeSchema: z.ZodType<FridgeRecipe, z.ZodTypeDef, unknown> = z.preprocess(
@@ -201,6 +202,7 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
     z
       .object({
         appliance: z.string().min(1).max(40).optional(),
+        course_type: z.enum(["plat", "entree", "soupe", "dessert"]).optional(),
       })
       .optional()
       .parse(input ?? {}),
@@ -222,6 +224,13 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
     const restrictions = (prefs.data ?? []).map((p) => p.restriction);
     const userAppliances = (appl.data ?? []).map((a) => a.appliance as string);
     const selected = data?.appliance?.trim();
+    const courseType = data?.course_type ?? "plat";
+    const courseLabel = {
+      plat: "plat principal",
+      entree: "entrée",
+      soupe: "soupe",
+      dessert: "dessert",
+    }[courseType];
     const targetAppliances = selected ? [selected] : (userAppliances.length ? userAppliances : ["poele", "four", "casserole"]);
     const appliances = targetAppliances.join(", ");
     const applianceLabel = (id: string) => APPLIANCES.find((a) => a.id === id)?.label ?? id;
@@ -236,7 +245,7 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
     const gateway = createLovableAiGatewayProvider(apiKey);
     const model = gateway("google/gemini-3-flash-preview");
 
-    const cuisinePalette = [
+    const cuisinePaletteSavoury = [
       "française (bistrot, gratin, mijoté, sauce crème/vin/herbes)",
       "italienne (pâtes, risotto, sauce tomate/basilic/parmesan)",
       "asiatique (wok soja-gingembre-ail-sésame, légumes croquants)",
@@ -246,10 +255,20 @@ export const suggestFromFridge = createServerFn({ method: "POST" })
       "méditerranéenne (huile d'olive, citron, herbes, féta, olives)",
       "libanaise (sumac, tahini, persil, citron, grenade)",
     ];
+    const cuisinePaletteDessert = [
+      "française (tarte, crème, fondant, fruits de saison)",
+      "italienne (tiramisu, panna cotta, cantucci, amaretti)",
+      "orientale (fleur d'oranger, miel, amande, semoule)",
+      "américaine (cookie, brownie, cheesecake, crumble)",
+      "asiatique (mochi, matcha, sésame, coco)",
+      "méditerranéenne (yaourt-miel, agrumes, amandes, fruits secs)",
+    ];
+    const cuisinePalette = courseType === "dessert" ? cuisinePaletteDessert : cuisinePaletteSavoury;
 
     function buildSystem(cuisine: string, variation: string) {
-      return `Tu es un chef qui propose UNE recette COMPLETE, COHERENTE et SAVOUREUSE realisable avec le frigo de la famille.
+      return `Tu es un chef qui propose UNE recette (${courseLabel}) COMPLETE, COHERENTE et SAVOUREUSE realisable avec le frigo de la famille.
 Regles ABSOLUES :
+- Type de plat OBLIGATOIRE : ${courseLabel}. Le champ "course_type" DOIT valoir exactement "${courseType}".
 - Identite culinaire CLAIRE : cuisine ${cuisine}. La recette doit sentir son pays : épices, sauce, technique, accompagnement cohérents avec ce style.
 - Accords logiques proteine + legumes + sauce + accompagnement. Rien de bancal.
 - Respecter ABSOLUMENT les exclusions : ${restrictions.join(", ") || "aucune"}.
@@ -277,11 +296,11 @@ Reponds : {"recipe": { ... une recette complete ... }}.`;
         const { recipe } = await generateJson<{ recipe: FridgeRecipe }>({
           model,
           system: buildSystem(cuisine, variation),
-          prompt: `Frigo : ${items.join(", ")}. Genere UNE recette ${cuisine} complete, savoureuse et coherente.`,
+          prompt: `Frigo : ${items.join(", ")}. Genere UNE ${courseLabel} ${cuisine} complete, savoureuse et coherente.`,
           schema: singleSuggestionSchema,
           maxOutputTokens: 2500,
         });
-        return recipe;
+        return { ...recipe, course_type: courseType } as FridgeRecipe;
       } catch (e) {
         console.error("Fridge recipe generation failed", { cuisine, error: (e as Error).message });
         return null;

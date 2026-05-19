@@ -15,7 +15,7 @@ import { Refrigerator, Plus, X, Sparkles, RefreshCw, Save, Clock, Flame, Carrot,
 import { Checkbox } from "@/components/ui/checkbox";
 import { StrictDietBanner } from "@/components/strict-diet-banner";
 import { useNavigate } from "@tanstack/react-router";
-import { APPLIANCES } from "@/lib/constants";
+import { APPLIANCES, COURSE_TYPES, type CourseTypeId } from "@/lib/constants";
 import { getFamilyContext } from "@/lib/family.functions";
 
 export const Route = createFileRoute("/frigo")({
@@ -53,6 +53,7 @@ function FrigoPage() {
   const [name, setName] = useState("");
   const [qty, setQty] = useState("");
   const [appliance, setAppliance] = useState<string>("");
+  const [courseType, setCourseType] = useState<CourseTypeId>("plat");
   const [suggestions, setSuggestions] = useState<any[] | null>(null);
   const [selected, setSelected] = useState<Record<number, boolean>>({});
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
@@ -78,7 +79,7 @@ function FrigoPage() {
     setExpanded({});
     setSuggestions(null);
     try {
-      const s = await suggest({ data: { appliance: appliance || undefined } });
+      const s = await suggest({ data: { appliance: appliance || undefined, course_type: courseType } });
       if (!s?.length) {
         toast.error("Aucune recette compatible n'a pu être générée. Ajuste tes ingrédients ou tes restrictions.");
         return;
@@ -165,6 +166,16 @@ function FrigoPage() {
 
       <section>
         <div className="bg-card border border-border rounded-2xl p-4 mb-3">
+          <label className="block text-sm font-medium mb-2">Type de plat</label>
+          <select
+            value={courseType}
+            onChange={(e) => setCourseType(e.target.value as CourseTypeId)}
+            className="w-full md:w-auto border border-border rounded-lg px-3 py-2 bg-background text-sm mb-4"
+          >
+            {COURSE_TYPES.map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
           <label className="block text-sm font-medium mb-2">Appareil à utiliser</label>
           <select
             value={appliance}

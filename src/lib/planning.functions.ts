@@ -571,7 +571,7 @@ export const consolidateShopping = createServerFn({ method: "POST" })
       (groups.get(key) ?? groups.set(key, []).get(key)!).push({ ...r, category: cat });
     }
     let merged = 0;
-    const updates: Promise<any>[] = [];
+    const updates: Array<PromiseLike<any>> = [];
     const toDelete: string[] = [];
     for (const arr of groups.values()) {
       if (arr.length <= 1) {

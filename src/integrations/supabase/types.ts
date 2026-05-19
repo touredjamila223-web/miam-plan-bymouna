@@ -304,6 +304,7 @@ export type Database = {
           difficulty: string | null
           id: string
           ingredients: Json
+          nutrition: Json | null
           owner_id: string | null
           photo_url: string | null
           prep_time: number | null
@@ -324,6 +325,7 @@ export type Database = {
           difficulty?: string | null
           id?: string
           ingredients?: Json
+          nutrition?: Json | null
           owner_id?: string | null
           photo_url?: string | null
           prep_time?: number | null
@@ -344,6 +346,7 @@ export type Database = {
           difficulty?: string | null
           id?: string
           ingredients?: Json
+          nutrition?: Json | null
           owner_id?: string | null
           photo_url?: string | null
           prep_time?: number | null

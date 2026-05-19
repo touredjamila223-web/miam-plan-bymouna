@@ -34,9 +34,24 @@ function parseLeadingNumber(s: string): { value: number; rest: string } | null {
 
 function formatScaled(value: number, unit: string): string {
   const u = unit.toLowerCase();
+  // Conversion automatique g↔kg / ml↔cl/L pour rester lisible
+  if (/^g\b/.test(u) && value >= 1000) {
+    const rest = unit.replace(/^g\b/i, "").trim();
+    return formatScaled(value / 1000, `kg${rest ? " " + rest : ""}`);
+  }
+  if (/^ml\b/.test(u)) {
+    if (value >= 1000) {
+      const rest = unit.replace(/^ml\b/i, "").trim();
+      return formatScaled(value / 1000, `L${rest ? " " + rest : ""}`);
+    }
+    if (value >= 100 && value % 10 === 0) {
+      const rest = unit.replace(/^ml\b/i, "").trim();
+      return formatScaled(value / 10, `cl${rest ? " " + rest : ""}`);
+    }
+  }
   // Arrondis adaptés selon l'unité
   let rounded: number;
-  if (/^(g|ml|gr)\b/.test(u)) {
+  if (/^(g|ml|gr|cl)\b/.test(u)) {
     if (value >= 100) rounded = Math.round(value / 5) * 5;
     else if (value >= 20) rounded = Math.round(value);
     else rounded = Math.round(value * 10) / 10;

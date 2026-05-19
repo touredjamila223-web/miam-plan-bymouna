@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getRecipe, toggleFavorite } from "@/lib/recipes.functions";
+import { getRecipe, toggleFavorite, computeNutrition } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot, Minus, Plus, Download, Share2 } from "lucide-react";
+import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot, Minus, Plus, Download, Share2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { scaleQty, caloriesPerServing, caloriesTotal } from "@/lib/scale";
@@ -19,6 +19,7 @@ function RecipeDetail() {
   const { user } = useAuth();
   const get = useServerFn(getRecipe);
   const fav = useServerFn(toggleFavorite);
+  const qc = useQueryClient();
   const { data: r, isLoading } = useQuery({ queryKey: ["recipe", id], queryFn: () => get({ data: { id } }) });
   const favMut = useMutation({
     mutationFn: () => fav({ data: { recipe_id: id } }),
@@ -42,6 +43,8 @@ function RecipeDetail() {
       favPending={favMut.isPending}
       showFav={!!user}
       id={id}
+      onNutritionUpdated={() => qc.invalidateQueries({ queryKey: ["recipe", id] })}
+      showCompute={!!user}
     />
   );
 }
@@ -55,6 +58,8 @@ function RecipeView({
   favPending,
   showFav,
   id,
+  onNutritionUpdated,
+  showCompute,
 }: {
   recipe: any;
   ingredients: any[];
@@ -64,11 +69,25 @@ function RecipeView({
   favPending: boolean;
   showFav: boolean;
   id: string;
+  onNutritionUpdated: () => void;
+  showCompute: boolean;
 }) {
   const [servings, setServings] = useState(baseServings);
   const ratio = servings / baseServings;
   const kcalPortion = caloriesPerServing(r.calories);
   const kcalTotal = caloriesTotal(kcalPortion, servings);
+  const compute = useServerFn(computeNutrition);
+  const [localNutrition, setLocalNutrition] = useState<any>(r.nutrition ?? null);
+  const nutMut = useMutation({
+    mutationFn: () => compute({ data: { recipe_id: id } }),
+    onSuccess: (n) => {
+      setLocalNutrition(n);
+      toast.success("Valeurs nutritionnelles estimées");
+      onNutritionUpdated();
+    },
+    onError: (e: any) => toast.error(e.message ?? "Erreur"),
+  });
+  const nut = localNutrition;
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -90,6 +109,38 @@ function RecipeView({
         {r.description && <p className="text-muted-foreground">{r.description}</p>}
         {r.vegetables && (r.vegetables as string[]).length > 0 && (
           <p className="text-sm text-muted-foreground mt-2 inline-flex items-center gap-1"><Carrot className="w-4 h-4"/>Légumes : {(r.vegetables as string[]).join(", ")}</p>
+        )}
+      </div>
+
+      {/* Nutrition */}
+      <div className="bg-card border border-border rounded-2xl p-4 md:p-5">
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <h2 className="font-bold inline-flex items-center gap-2"><Flame className="w-4 h-4 text-primary"/>Valeurs nutritionnelles <span className="text-xs text-muted-foreground font-normal">(par portion)</span></h2>
+          {showCompute && (
+            <Button size="sm" variant="outline" onClick={() => nutMut.mutate()} disabled={nutMut.isPending}>
+              <Sparkles className="w-3.5 h-3.5"/>{nut ? "Recalculer" : "Estimer avec l'IA"}
+            </Button>
+          )}
+        </div>
+        {nut ? (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+            {[
+              { l: "Calories", v: `${Math.round(nut.kcal)} kcal` },
+              { l: "Protéines", v: `${nut.protein_g} g` },
+              { l: "Glucides", v: `${nut.carbs_g} g` },
+              { l: "Lipides", v: `${nut.fat_g} g` },
+              { l: "Fibres", v: `${nut.fiber_g} g` },
+            ].map((x) => (
+              <div key={x.l} className="bg-secondary/40 rounded-lg py-2">
+                <div className="text-[10px] uppercase text-muted-foreground">{x.l}</div>
+                <div className="font-semibold tabular-nums text-sm">{x.v}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {nutMut.isPending ? "L'IA estime les valeurs…" : "Valeurs nutritionnelles non encore calculées."}
+          </p>
         )}
       </div>
 

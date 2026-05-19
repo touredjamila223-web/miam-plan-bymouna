@@ -1293,3 +1293,69 @@ export const createCollection = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return row;
   });
+
+// ============== NUTRITION (IA) ==============
+
+const nutritionSchema = z.object({
+  kcal: z.number().min(20).max(3000),
+  protein_g: z.number().min(0).max(300),
+  carbs_g: z.number().min(0).max(400),
+  fat_g: z.number().min(0).max(300),
+  fiber_g: z.number().min(0).max(80),
+});
+
+export const computeNutrition = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ recipe_id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("Clé Lovable AI manquante");
+
+    const { data: recipe, error } = await supabase
+      .from("recipes")
+      .select("id, title, servings, ingredients, owner_id")
+      .eq("id", data.recipe_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!recipe) throw new Error("Recette introuvable");
+    if (recipe.owner_id && recipe.owner_id !== userId) {
+      // recette seed → calcul autorisé mais on ne sauvegarde pas
+    }
+
+    const servings = Math.max(1, Number(recipe.servings ?? 4));
+    const gateway = createLovableAiGatewayProvider(apiKey);
+    const model = gateway("google/gemini-2.5-flash");
+
+    const nutrition = await generateJson({
+      model,
+      system:
+        "Tu es un nutritionniste. Estime les valeurs nutritionnelles MOYENNES PAR PORTION d'une recette à partir de sa liste d'ingrédients. Sois réaliste (table CIQUAL/USDA mental), n'invente pas. Réponds uniquement avec un JSON strict.",
+      prompt: `Recette : ${recipe.title}
+Portions totales : ${servings}
+Ingrédients (quantités totales pour ${servings} pers.) : ${JSON.stringify(recipe.ingredients ?? [])}
+
+Réponds en JSON pour UNE portion :
+{ "kcal": <int>, "protein_g": <number>, "carbs_g": <number>, "fat_g": <number>, "fiber_g": <number> }`,
+      schema: nutritionSchema,
+      maxOutputTokens: 400,
+    });
+
+    const rounded = {
+      kcal: Math.round(nutrition.kcal),
+      protein_g: Math.round(nutrition.protein_g * 10) / 10,
+      carbs_g: Math.round(nutrition.carbs_g * 10) / 10,
+      fat_g: Math.round(nutrition.fat_g * 10) / 10,
+      fiber_g: Math.round(nutrition.fiber_g * 10) / 10,
+    };
+
+    // Sauvegarde uniquement si l'utilisateur est propriétaire
+    if (recipe.owner_id === userId) {
+      await supabase
+        .from("recipes")
+        .update({ nutrition: rounded, calories: rounded.kcal })
+        .eq("id", recipe.id)
+        .eq("owner_id", userId);
+    }
+    return rounded;
+  });

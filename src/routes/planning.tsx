@@ -6,8 +6,9 @@ import { toast } from "sonner";
 import { listMealPlan, upsertMealPlan, removeMealPlan, generateWeekPlan, clearWeekPlan } from "@/lib/planning.functions";
 import { listMyRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { CalendarDays, X, ChevronLeft, ChevronRight, Plus, Sparkles, Download, Trash2, Repeat } from "lucide-react";
+import { CalendarDays, X, ChevronLeft, ChevronRight, Plus, Sparkles, Download, Trash2, Repeat, CalendarPlus } from "lucide-react";
 import { generateWeekPlanPdf } from "@/lib/planning-pdf";
+import { downloadPlanningIcs } from "@/lib/planning-ics";
 import { COURSE_TYPES, type CourseTypeId } from "@/lib/constants";
 
 export const Route = createFileRoute("/planning")({
@@ -129,6 +130,19 @@ function PlanningPage() {
     }
   }
 
+  function downloadIcs() {
+    if (!plan?.length) {
+      toast.error("Le planning est vide");
+      return;
+    }
+    try {
+      downloadPlanningIcs(weekStartStr, plan as any);
+      toast.success("Calendrier exporté (.ics)");
+    } catch (e: any) {
+      toast.error(e.message ?? "Erreur export");
+    }
+  }
+
   if (!user) {
     return (
       <div className="text-center py-16">
@@ -192,6 +206,13 @@ function PlanningPage() {
           className="border border-border px-3 py-2 rounded-full text-sm inline-flex items-center gap-2"
         >
           <Download className="w-4 h-4" />PDF
+        </button>
+        <button
+          onClick={downloadIcs}
+          className="border border-border px-3 py-2 rounded-full text-sm inline-flex items-center gap-2"
+          title="Importable dans Google Agenda, Apple Calendar, Outlook…"
+        >
+          <CalendarPlus className="w-4 h-4" />Calendrier (.ics)
         </button>
       </div>
 

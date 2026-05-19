@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { generateRecipeBatch, saveRecipes, importRecipeFromUrl, importRecipeFromImage } from "@/lib/recipes.functions";
+import { getFamilyContext } from "@/lib/family.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +22,17 @@ export const Route = createFileRoute("/generer")({
 
 function Generer() {
   const { user } = useAuth();
-  const [appliance, setAppliance] = useState("cookeo");
+  const getCtx = useServerFn(getFamilyContext);
+  const { data: ctx } = useQuery({
+    queryKey: ["family-ctx"],
+    queryFn: () => getCtx(),
+    enabled: !!user,
+  });
+  const userAppliances: string[] = ctx?.appliances ?? [];
+  const availableAppliances = APPLIANCES.filter((a) =>
+    userAppliances.length ? userAppliances.includes(a.id) : true,
+  );
+  const [appliance, setAppliance] = useState<string>("");
   const [courseType, setCourseType] = useState<"plat" | "entree" | "soupe" | "dessert">("plat");
   const [hint, setHint] = useState("");
   const [recipes, setRecipes] = useState<any[]>([]);
@@ -127,9 +139,9 @@ function Generer() {
           <div>
             <Label>Appareil de cuisson</Label>
             <Select value={appliance} onValueChange={setAppliance}>
-              <SelectTrigger><SelectValue/></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={availableAppliances.length ? "Choisis un appareil…" : "Ajoute des appareils dans ton profil"}/></SelectTrigger>
               <SelectContent>
-                {APPLIANCES.map((a) => <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>)}
+                {availableAppliances.map((a) => <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -138,7 +150,7 @@ function Generer() {
             <Input placeholder="Ex : envie d'oriental, plutôt léger…" value={hint} onChange={(e) => setHint(e.target.value)} />
           </div>
         </div>
-        <Button onClick={go} disabled={loading} className="w-full">
+        <Button onClick={go} disabled={loading || !appliance} className="w-full">
           <Sparkles className="w-4 h-4"/>
           {loading ? "Le chef réfléchit…" : recipes.length ? "Régénérer 3 nouvelles recettes" : "Générer 3 recettes ✨"}
         </Button>

@@ -562,6 +562,8 @@ export const generateRecipe = createServerFn({ method: "POST" })
   });
 
 // Helper réutilisable côté serveur (chat IA "Leia", etc.)
+// Renvoie TOUJOURS 3 propositions de recettes variées pour la même demande,
+// adaptées à l'appareil choisi et au profil de l'utilisateur.
 export async function generateRecipeForUser(opts: {
   userId: string;
   prompt: string;
@@ -576,22 +578,32 @@ export async function generateRecipeForUser(opts: {
   const restrictions = (prefs.data ?? []).map((p) => p.restriction);
   const servings = profile.data?.household_size ?? 4;
   const family_name = profile.data?.family_name ?? null;
-  const recipe = await (async () => {
+  const gateway = createLovableAiGatewayProvider(apiKey);
+  const model = gateway("google/gemini-2.5-flash");
+  const variations = [
+    "Version 1 : interprétation classique et fidèle, la plus reconnaissable.",
+    "Version 2 : variante créative — autre protéine, autre technique ou autre style culinaire compatible.",
+    "Version 3 : version plus légère ou express, sans trahir l'esprit du plat.",
+  ];
+  const genOne = async (variation: string) => {
     try {
-      const gateway = createLovableAiGatewayProvider(apiKey);
-      const model = gateway("google/gemini-2.5-flash");
-      return await generateJson({
+      const recipe = await generateJson<any>({
         model,
         system: buildSystemPrompt({ appliance: opts.appliance, restrictions, servings, family_name }),
-        prompt: `Génère une recette complète pour : ${opts.prompt}`,
+        prompt: `Génère une recette complète pour : ${opts.prompt}.\n${variation}\nLa recette doit être différente des deux autres propositions générées en parallèle.`,
         schema: recipeSchema,
       });
+      return { ...recipe, appliance: opts.appliance };
     } catch (error) {
-      if (isAiPaymentError(error)) return fallbackRecipe({ prompt: opts.prompt, appliance: opts.appliance, servings, restrictions });
-      throw error;
+      if (isAiPaymentError(error)) return { ...fallbackRecipe({ prompt: opts.prompt, appliance: opts.appliance, servings, restrictions }), appliance: opts.appliance };
+      console.error("generateRecipeForUser variant failed", (error as Error).message);
+      return null;
     }
-  })();
-  return { ...recipe, appliance: opts.appliance };
+  };
+  const results = await Promise.all(variations.map((v) => genOne(v)));
+  const recipes = results.filter((r): r is any => !!r);
+  if (recipes.length === 0) throw new Error("Leia n'a pas pu générer de recettes. Réessaie.");
+  return { recipes };
 }
 
 // Public — generate without account (guest mode)

@@ -236,6 +236,41 @@ function CoursesPage() {
           <p className="text-center text-muted-foreground py-12">Liste vide — ajoutez des articles ou générez depuis votre planning.</p>
         )}
       </div>
+
+      {preview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !applying && setPreview(null)}>
+          <div className="bg-card border border-border rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5 border-b border-border">
+              <h3 className="text-xl font-bold flex items-center gap-2"><Combine className="w-5 h-5 text-primary" />Aperçu de la consolidation</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {preview.groups.length} groupe{preview.groups.length > 1 ? "s" : ""} de doublons — {preview.removed} ligne{preview.removed > 1 ? "s" : ""} sera{preview.removed > 1 ? "ont" : ""} supprimée{preview.removed > 1 ? "s" : ""}.
+              </p>
+            </div>
+            <div className="overflow-y-auto p-5 space-y-4 flex-1">
+              {preview.groups.map((g, i) => (
+                <div key={i} className="border border-border rounded-xl p-3">
+                  <div className="flex items-baseline justify-between gap-2 mb-2">
+                    <div>
+                      <span className="font-semibold">{g.item}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{g.category}</span>
+                    </div>
+                    <span className="text-sm font-medium text-primary">{g.mergedQty || "—"}</span>
+                  </div>
+                  <ul className="text-xs text-muted-foreground space-y-0.5 pl-3">
+                    {g.sources.map((s, j) => (
+                      <li key={j}>• {s.item}{s.qty ? ` — ${s.qty}` : ""}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <div className="p-4 border-t border-border flex justify-end gap-2">
+              <button disabled={applying} onClick={() => setPreview(null)} className="border border-border px-4 py-2 rounded-full text-sm hover:bg-accent/20 disabled:opacity-50">Annuler</button>
+              <button disabled={applying} onClick={applyDedupe} className="bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm disabled:opacity-50">{applying ? "Fusion..." : "Valider la fusion"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

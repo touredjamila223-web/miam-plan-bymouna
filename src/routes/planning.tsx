@@ -22,6 +22,12 @@ function startOfWeek(d: Date) {
   x.setHours(0, 0, 0, 0);
   return x;
 }
+function toLocalDateStr(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 const DAY_LABELS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
 type Slot = "soir" | "entree" | "soupe" | "dessert";
@@ -41,7 +47,7 @@ function PlanningPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
-  const weekStartStr = weekStart.toISOString().slice(0, 10);
+  const weekStartStr = toLocalDateStr(weekStart);
 
   const listPlan = useServerFn(listMealPlan);
   const upsert = useServerFn(upsertMealPlan);
@@ -191,8 +197,8 @@ function PlanningPage() {
 
       <div className="space-y-3">
         {days.map((d, i) => {
-          const dateStr = d.toISOString().slice(0, 10);
-          const isToday = dateStr === new Date().toISOString().slice(0, 10);
+          const dateStr = toLocalDateStr(d);
+          const isToday = dateStr === toLocalDateStr(new Date());
           const { dinner, extras } = entriesFor(dateStr);
           const usedSlots = new Set<string>(extras.map((e: any) => e.slot));
           return (

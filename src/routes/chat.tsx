@@ -298,7 +298,7 @@ function Chat() {
                   <div key={i} className="bg-card border border-border rounded-2xl p-4 space-y-2">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                      Leia mijote ta recette
+                      Leia mijote 3 recettes
                       {p.input?.appliance && ` au ${applianceLabel(p.input.appliance)}`}…
                     </div>
                     <Skeleton className="h-4 w-3/4" />

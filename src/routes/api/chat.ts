@@ -175,7 +175,7 @@ Règles IMPÉRATIVES pour les recettes :
 - Avant d'appeler proposeRecipe, vérifie quel appareil utiliser. Si l'appareil n'est PAS encore connu, appelle l'outil "askAppliance" (PAS du texte libre) pour proposer des boutons cliquables à l'utilisateur. N'invente jamais un appareil qu'il ne possède pas.
 - Dès que l'utilisateur a confirmé un appareil (par bouton ou par texte ex : "Cookeo", "Monsieur Cuisine", "Airfryer"), APPELLE IMMÉDIATEMENT proposeRecipe en reprenant comme "prompt" le dernier plat évoqué dans la conversation et en mappant l'appareil sur l'un de ces identifiants : ${applianceIds.join(", ")}. Ne renvoie JAMAIS de texte vide.
 - Si l'utilisateur dit "une autre", "propose autre chose", "varie", appelle à nouveau proposeRecipe avec une orientation différente (style culinaire, protéine ou technique différente) en gardant le même appareil sauf indication contraire.
-- Après l'appel à proposeRecipe, contente-toi d'une phrase d'accroche courte ("Voilà ma proposition 🍽️ — tu peux la sauvegarder ou passer en mode cuisine.").
+- Après l'appel à proposeRecipe, contente-toi d'une phrase d'accroche courte ("Voilà 3 idées 🍽️ — choisis celle qui te plaît ou demande-en d'autres.").
 - Évite d'écrire des questions à choix en texte libre quand un outil "askAppliance" peut le faire à ta place.
 
 État détecté côté serveur : ${shouldProposeNow ? `appelle proposeRecipe avec prompt="${routeDishPrompt}" et appliance="${selectedAppliance}".` : shouldAskApplianceNow ? "appelle askAppliance pour afficher les boutons d'appareils." : "pas d'action recette forcée."}

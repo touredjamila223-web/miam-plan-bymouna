@@ -84,6 +84,8 @@ function CoursesPage() {
 
   const [item, setItem] = useState("");
   const [loading, setLoading] = useState(false);
+  const [preview, setPreview] = useState<null | { groups: Array<{ item: string; category: string; mergedQty: string; sources: Array<{ item: string; qty: string | null }> }>; removed: number }>(null);
+  const [applying, setApplying] = useState(false);
 
   const addMut = useMutation({
     mutationFn: (v: string) => add({ data: { item: v } }),

@@ -4,6 +4,15 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
 import { generateText } from "ai";
+import { APPLIANCE_GUIDE, APPLIANCES } from "./constants";
+
+function applianceGuideBlock(applianceId: string): string {
+  const id = applianceId.toLowerCase().trim();
+  const label = APPLIANCES.find((a) => a.id === id)?.label ?? applianceId;
+  const guide = APPLIANCE_GUIDE[id];
+  if (guide) return `• ${guide}`;
+  return `• ${label} — Préciser pour CHAQUE étape : mode/programme exact, intensité chiffrée (feu 1-9 ou °C ou vitesse) et durée.`;
+}
 
 
 function extractJsonObject(text: string) {

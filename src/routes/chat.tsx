@@ -264,13 +264,27 @@ function Chat() {
                       </div>
                     );
                   }
+                  const recipes = Array.isArray(p.output?.recipes)
+                    ? p.output.recipes
+                    : p.output
+                      ? [p.output]
+                      : [];
                   return (
-                    <RecipeProposalCard
-                      key={i}
-                      recipe={p.output}
-                      appliance={p.input?.appliance}
-                      onAnother={askAnother}
-                    />
+                    <div key={i} className="space-y-3">
+                      {recipes.length > 1 && (
+                        <div className="text-xs text-muted-foreground">
+                          Voici {recipes.length} propositions — choisis celle qui te plaît, ou demande-en d'autres.
+                        </div>
+                      )}
+                      {recipes.map((r: any, idx: number) => (
+                        <RecipeProposalCard
+                          key={idx}
+                          recipe={r}
+                          appliance={p.input?.appliance}
+                          onAnother={askAnother}
+                        />
+                      ))}
+                    </div>
                   );
                 }
                 if (p.state === "output-error") {

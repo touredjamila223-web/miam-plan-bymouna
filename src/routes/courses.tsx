@@ -189,7 +189,7 @@ function CoursesPage() {
         </div>
         <div className="flex gap-2">
           <button onClick={runGenerate} disabled={loading} className="bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm flex items-center gap-2 disabled:opacity-50"><Sparkles className="w-4 h-4" />{loading ? "..." : "Depuis le planning"}</button>
-          <button onClick={runDedupe} className="border border-border px-3 py-2 rounded-full text-sm flex items-center gap-2 hover:bg-accent/20"><Combine className="w-4 h-4" />Fusionner doublons</button>
+          <button onClick={runDedupePreview} className="border border-border px-3 py-2 rounded-full text-sm flex items-center gap-2 hover:bg-accent/20"><Combine className="w-4 h-4" />Fusionner doublons</button>
           <button onClick={exportPdf} className="border border-border px-3 py-2 rounded-full text-sm flex items-center gap-2 hover:bg-accent/20"><FileDown className="w-4 h-4" />PDF</button>
           <button onClick={clearDone} className="border border-border px-3 py-2 rounded-full text-sm flex items-center gap-2 hover:bg-accent/20"><Trash2 className="w-4 h-4" />Vider cochés</button>
           <AlertDialog>

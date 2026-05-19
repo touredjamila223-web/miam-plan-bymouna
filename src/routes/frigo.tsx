@@ -79,7 +79,11 @@ function FrigoPage() {
     setExpanded({});
     setSuggestions(null);
     try {
-      const s = await suggest({ data: { appliance: appliance || undefined, course_type: courseType } });
+      if (!appliance) {
+        toast.error("Choisis un appareil avant de générer.");
+        return;
+      }
+      const s = await suggest({ data: { appliance, course_type: courseType } });
       if (!s?.length) {
         toast.error("Aucune recette compatible n'a pu être générée. Ajuste tes ingrédients ou tes restrictions.");
         return;
@@ -182,7 +186,7 @@ function FrigoPage() {
             onChange={(e) => setAppliance(e.target.value)}
             className="w-full md:w-auto border border-border rounded-lg px-3 py-2 bg-background text-sm"
           >
-            <option value="">Laisser l'IA choisir (parmi mes appareils)</option>
+            <option value="" disabled>Choisis un appareil…</option>
             {availableAppliances.map((a) => (
               <option key={a.id} value={a.id}>{a.label}</option>
             ))}
@@ -191,7 +195,7 @@ function FrigoPage() {
             Les étapes respecteront les modes et intensités réels de l'appareil choisi.
           </p>
         </div>
-        <button onClick={runSuggest} disabled={loading || !items?.length} className="w-full md:w-auto bg-gradient-to-r from-primary to-primary/80 text-primary-foreground px-6 py-3 rounded-full font-medium flex items-center justify-center gap-2 disabled:opacity-50">
+        <button onClick={runSuggest} disabled={loading || !items?.length || !appliance} className="w-full md:w-auto bg-gradient-to-r from-primary to-primary/80 text-primary-foreground px-6 py-3 rounded-full font-medium flex items-center justify-center gap-2 disabled:opacity-50">
           <Sparkles className="w-5 h-5" />{loading ? "L'IA cherche..." : "Proposer des recettes"}
         </button>
       </section>

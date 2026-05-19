@@ -130,7 +130,7 @@ Restrictions alimentaires : ${prefs2}.`;
               }),
               proposeRecipe: tool({
                 description:
-                  "Génère une proposition de recette complète et structurée pour l'utilisateur, adaptée à un appareil de cuisson précis. À APPELER IMPÉRATIVEMENT dès que tu connais (1) le plat/idée demandé et (2) l'appareil choisi — y compris quand l'utilisateur vient juste de répondre avec un nom d'appareil après ta question. Ne renvoie JAMAIS la recette en texte : utilise UNIQUEMENT cet outil.",
+                  "Génère 3 propositions de recettes complètes et structurées pour l'utilisateur, adaptées à un appareil de cuisson précis. À APPELER IMPÉRATIVEMENT dès que tu connais (1) le plat/idée demandé et (2) l'appareil choisi — y compris quand l'utilisateur vient juste de répondre avec un nom d'appareil après ta question. Ne renvoie JAMAIS les recettes en texte : utilise UNIQUEMENT cet outil.",
                 inputSchema: z.object({
                   prompt: z
                     .string()

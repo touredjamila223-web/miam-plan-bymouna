@@ -8,10 +8,12 @@ import {
   addFridgeItem,
   removeFridgeItem,
   suggestFromFridge,
+  detectFridgePhoto,
+  bulkAddFridgeItems,
 } from "@/lib/planning.functions";
 import { saveRecipes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { Refrigerator, Plus, X, Sparkles, RefreshCw, Save, Clock, Flame, Carrot, ChevronDown, ChevronUp } from "lucide-react";
+import { Refrigerator, Plus, X, Sparkles, RefreshCw, Save, Clock, Flame, Carrot, ChevronDown, ChevronUp, Camera, Loader2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StrictDietBanner } from "@/components/strict-diet-banner";
 import { useNavigate } from "@tanstack/react-router";
@@ -33,6 +35,8 @@ function FrigoPage() {
   const suggest = useServerFn(suggestFromFridge);
   const save = useServerFn(saveRecipes);
   const getCtx = useServerFn(getFamilyContext);
+  const detectPhoto = useServerFn(detectFridgePhoto);
+  const bulkAdd = useServerFn(bulkAddFridgeItems);
 
   const { data: items } = useQuery({
     queryKey: ["fridge"],
@@ -58,6 +62,64 @@ function FrigoPage() {
   const [selected, setSelected] = useState<Record<number, boolean>>({});
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(false);
+
+  // Détection photo
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [detected, setDetected] = useState<any[] | null>(null);
+  const [detectedSelected, setDetectedSelected] = useState<Record<number, boolean>>({});
+
+  function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result));
+      r.onerror = () => rej(new Error("Lecture impossible"));
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function onPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("Photo trop lourde (max 8 Mo).");
+      return;
+    }
+    setPhotoLoading(true);
+    setDetected(null);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const res = await detectPhoto({ data: { image_data_url: dataUrl } });
+      if (!res.items.length) {
+        toast.error("Aucun aliment détecté. Essaie avec une photo plus nette.");
+        return;
+      }
+      setDetected(res.items);
+      const all: Record<number, boolean> = {};
+      res.items.forEach((_, i) => { all[i] = true; });
+      setDetectedSelected(all);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Erreur");
+    } finally {
+      setPhotoLoading(false);
+    }
+  }
+
+  async function addDetected() {
+    if (!detected) return;
+    const picks = detected.filter((_, i) => detectedSelected[i]);
+    if (!picks.length) return toast.error("Sélectionne au moins un produit.");
+    try {
+      const res = await bulkAdd({
+        data: { items: picks.map((p) => ({ name: p.name, qty: p.qty || undefined })) },
+      });
+      toast.success(`${res.inserted} produit(s) ajouté(s) au frigo.`);
+      setDetected(null);
+      qc.invalidateQueries({ queryKey: ["fridge"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erreur");
+    }
+  }
 
   const addMut = useMutation({
     mutationFn: (v: { name: string; qty: string }) =>
@@ -157,6 +219,21 @@ function FrigoPage() {
           <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder="Qté (optionnel)" className="w-32 border border-border rounded-lg px-3 py-2 bg-background" />
           <button type="submit" className="bg-primary text-primary-foreground px-4 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50" disabled={addMut.isPending}><Plus className="w-4 h-4" />Ajouter</button>
         </form>
+        <div className="mb-4">
+          <label className="inline-flex items-center gap-2 text-sm bg-secondary/50 hover:bg-secondary px-3 py-2 rounded-lg cursor-pointer transition">
+            {photoLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>}
+            {photoLoading ? "Analyse de la photo…" : "Détecter depuis une photo"}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={onPhotoChange}
+              disabled={photoLoading}
+            />
+          </label>
+          <p className="text-xs text-muted-foreground mt-1">Prends ton frigo en photo, l'IA liste les produits avec une DLC estimée.</p>
+        </div>
         <div className="flex flex-wrap gap-2">
           {(items ?? []).map((it: any) => (
             <span key={it.id} className="inline-flex items-center gap-2 bg-secondary/40 px-3 py-1.5 rounded-full text-sm">
@@ -167,6 +244,55 @@ function FrigoPage() {
           {!items?.length && <p className="text-sm text-muted-foreground">Votre frigo est vide pour l'instant.</p>}
         </div>
       </section>
+
+      {detected && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+          onClick={() => setDetected(null)}
+        >
+          <div
+            className="bg-card border border-border rounded-2xl w-full max-w-lg p-5 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-3 gap-2">
+              <div>
+                <h3 className="font-bold inline-flex items-center gap-2"><Camera className="w-4 h-4 text-primary"/>Aliments détectés</h3>
+                <p className="text-xs text-muted-foreground">Décoche ce que tu ne veux pas, puis ajoute au frigo.</p>
+              </div>
+              <button onClick={() => setDetected(null)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4"/></button>
+            </div>
+            <ul className="space-y-2 mb-4">
+              {detected.map((it: any, i: number) => (
+                <li key={i} className="flex items-center gap-2 border border-border rounded-xl p-2 bg-background">
+                  <Checkbox
+                    checked={!!detectedSelected[i]}
+                    onCheckedChange={(v) => setDetectedSelected((s) => ({ ...s, [i]: !!v }))}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm capitalize">{it.name}</div>
+                    <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-2">
+                      {it.qty && <span>{it.qty}</span>}
+                      {it.category && <span className="capitalize">· {it.category}</span>}
+                      {typeof it.expires_in_days === "number" && (
+                        <span>· DLC ~{it.expires_in_days} j</span>
+                      )}
+                      {typeof it.confidence === "number" && (
+                        <span>· {Math.round(it.confidence * 100)}%</span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDetected(null)} className="px-4 py-2 rounded-lg border border-border text-sm">Annuler</button>
+              <button onClick={addDetected} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm inline-flex items-center gap-2">
+                <Plus className="w-4 h-4"/>Ajouter au frigo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section>
         <div className="bg-card border border-border rounded-2xl p-4 mb-3">

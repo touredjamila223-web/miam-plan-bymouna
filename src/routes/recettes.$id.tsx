@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getRecipe, toggleFavorite, computeNutrition, getRecipeNote, upsertRecipeNote } from "@/lib/recipes.functions";
+import { getRecipe, toggleFavorite, computeNutrition, getRecipeNote, upsertRecipeNote, suggestSubstitutes } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot, Minus, Plus, Download, Share2, Sparkles, NotebookPen, Save } from "lucide-react";
+import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot, Minus, Plus, Download, Share2, Sparkles, NotebookPen, Save, Replace, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
@@ -114,6 +114,35 @@ function RecipeView({
     },
     onError: (e: any) => toast.error(e.message ?? "Erreur"),
   });
+
+  // Substituts d'ingrédients
+  const subFn = useServerFn(suggestSubstitutes);
+  const [subFor, setSubFor] = useState<{ name: string; qty?: string } | null>(null);
+  const [subs, setSubs] = useState<{ name: string; ratio: string; notes?: string }[] | null>(null);
+  const [subLoading, setSubLoading] = useState(false);
+  async function askSubstitutes(ing: any) {
+    const name = ing?.name ?? "";
+    if (!name) return;
+    setSubFor({ name, qty: ing?.qty });
+    setSubs(null);
+    setSubLoading(true);
+    try {
+      const res = await subFn({
+        data: {
+          ingredient: name,
+          qty: ing?.qty ?? undefined,
+          recipe_title: r.title,
+          recipe_context: r.description ?? undefined,
+        },
+      });
+      setSubs(res.substitutes);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erreur");
+      setSubFor(null);
+    } finally {
+      setSubLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -269,11 +298,21 @@ function RecipeView({
           )}
           <ul className="space-y-2 text-sm">
             {ingredients.map((ing, i) => (
-              <li key={i} className="flex justify-between gap-2">
-                <span>{ing.name}</span>
+              <li key={i} className="flex justify-between items-center gap-2 group">
+                <span className="flex-1">{ing.name}</span>
                 <span className="text-muted-foreground tabular-nums">
                   {scaleQty(ing.qty, ratio)}
                 </span>
+                {showFav && (
+                  <button
+                    type="button"
+                    onClick={() => askSubstitutes({ ...ing, qty: scaleQty(ing.qty, ratio) })}
+                    className="text-muted-foreground hover:text-primary opacity-60 hover:opacity-100"
+                    title="Suggérer un substitut"
+                  >
+                    <Replace className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -294,6 +333,49 @@ function RecipeView({
           ))}
         </div>
       </div>
+
+      {subFor && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+          onClick={() => setSubFor(null)}
+        >
+          <div
+            className="bg-card border border-border rounded-2xl w-full max-w-lg p-5 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 className="font-bold inline-flex items-center gap-2">
+                  <Replace className="w-4 h-4 text-primary" />
+                  Substituts pour « {subFor.name} »
+                </h3>
+                {subFor.qty && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Quantité de référence : {subFor.qty}
+                  </p>
+                )}
+              </div>
+              <button onClick={() => setSubFor(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {subLoading && <p className="text-sm text-muted-foreground py-6 text-center">L'IA cherche des alternatives…</p>}
+            {subs && (
+              <ul className="space-y-2">
+                {subs.map((s, i) => (
+                  <li key={i} className="border border-border rounded-xl p-3 bg-background">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-semibold">{s.name}</span>
+                      <span className="text-xs bg-secondary/60 px-2 py-0.5 rounded-full tabular-nums">{s.ratio}</span>
+                    </div>
+                    {s.notes && <p className="text-xs text-muted-foreground mt-1">{s.notes}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

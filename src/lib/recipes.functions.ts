@@ -1395,3 +1395,74 @@ export const upsertRecipeNote = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// ============== INGREDIENT SUBSTITUTES ==============
+
+const substituteSchema = z.object({
+  substitutes: z
+    .array(
+      z.object({
+        name: z.string(),
+        ratio: z.string(),
+        notes: z.string().optional().default(""),
+      }),
+    )
+    .min(1)
+    .max(6),
+});
+
+export const suggestSubstitutes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        ingredient: z.string().min(1).max(120),
+        qty: z.string().max(60).optional(),
+        recipe_title: z.string().max(200).optional(),
+        recipe_context: z.string().max(600).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("Clé Lovable AI manquante");
+
+    const [prefs, fridge] = await Promise.all([
+      supabase.from("dietary_preferences").select("restriction").eq("user_id", userId),
+      supabase.from("fridge_items").select("name").eq("user_id", userId),
+    ]);
+    const restrictions = (prefs.data ?? []).map((p) => p.restriction);
+    const available = (fridge.data ?? []).map((f) => f.name);
+
+    const gateway = createLovableAiGatewayProvider(apiKey);
+    const model = gateway("google/gemini-3-flash-preview");
+
+    const { text } = await generateText({
+      model,
+      system: `Tu es un chef expert en substitutions d'ingrédients en cuisine française et familiale.
+Réponds UNIQUEMENT avec un JSON valide de cette forme :
+{"substitutes":[{"name":"...","ratio":"...","notes":"..."}]}
+- "name" : ingrédient de remplacement (clair, courant).
+- "ratio" : règle de conversion par rapport à la quantité demandée (ex : "même quantité", "x1,2", "100 g pour 100 g de crème", "1 jaune d'œuf + 50 ml de lait pour 100 ml de crème").
+- "notes" : 1 courte phrase sur l'impact texture/goût ou un conseil d'usage.
+Donne 3 à 5 alternatives PERTINENTES dans le contexte de la recette.
+${restrictions.length ? `Respecte impérativement les restrictions : ${restrictions.join(", ")}.` : ""}
+${available.length ? `Si possible, privilégie ce qui est déjà dans le frigo de l'utilisateur : ${available.slice(0, 30).join(", ")}.` : ""}
+Aucun Markdown, aucune phrase avant/après le JSON.`,
+      prompt: `Ingrédient à remplacer : ${data.ingredient}${data.qty ? ` (${data.qty})` : ""}.
+${data.recipe_title ? `Recette : ${data.recipe_title}.` : ""}
+${data.recipe_context ? `Contexte : ${data.recipe_context}` : ""}
+Propose des substituts adaptés.`,
+      temperature: 0.4,
+      maxOutputTokens: 1200,
+    });
+
+    try {
+      const parsed = substituteSchema.parse(extractJsonObject(text));
+      return parsed;
+    } catch (e) {
+      console.error("Invalid substitutes JSON", { text: text.slice(0, 500) });
+      throw new Error("L'IA n'a pas pu proposer de substituts. Réessaie.");
+    }
+  });

@@ -1098,6 +1098,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
           maxTime?: number;
           sort?: "recent" | "rated" | "loved" | "todo";
           course_type?: string;
+          difficulty?: string;
         }
       | undefined) =>
       input ?? {},
@@ -1122,6 +1123,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
     if (data?.cuisine) query = query.ilike("cuisine_style", `%${data.cuisine}%`);
     if (data?.appliance) query = query.eq("appliance", data.appliance);
     if (data?.course_type) query = query.eq("course_type", data.course_type);
+    if (data?.difficulty) query = query.eq("difficulty", data.difficulty);
     if (data?.maxTime) query = query.lte("prep_time", data.maxTime);
     const { data: rows, error } = await query.order("created_at", { ascending: false });
     if (error) throw new Error(error.message);

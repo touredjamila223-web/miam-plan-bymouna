@@ -1369,3 +1369,83 @@ export const saveBatchSession = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { shopping_inserted: rows.length };
   });
+
+// ============== FRIDGE PHOTO DETECTION ==============
+
+const detectedItemSchema = z.object({
+  name: z.string().min(1).max(80),
+  qty: z.string().max(40).optional().default(""),
+  category: z.string().max(40).optional().default(""),
+  expires_in_days: z.number().int().min(0).max(365).optional().nullable(),
+  confidence: z.number().min(0).max(1).optional(),
+});
+const detectionSchema = z.object({
+  items: z.array(detectedItemSchema).max(40),
+});
+
+export const detectFridgePhoto = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ image_data_url: z.string().min(50).max(8_000_000) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("Clé Lovable AI manquante");
+
+    const gateway = createLovableAiGatewayProvider(apiKey);
+    const model = gateway("google/gemini-2.5-flash");
+
+    const { text } = await generateText({
+      model,
+      system: `Tu es un assistant qui analyse une photo d'intérieur de frigo (ou d'un plan de travail / placard) pour lister les aliments visibles.
+Réponds UNIQUEMENT avec un JSON valide :
+{"items":[{"name":"...","qty":"...","category":"...","expires_in_days":N,"confidence":0.0-1.0}]}
+Règles :
+- "name" : nom court en français, singulier, minuscule (ex : "yaourt nature", "carotte", "poulet cru", "fromage râpé").
+- "qty" : estimation visuelle si possible ("1 pot", "500 g environ", "3 unités"), sinon chaîne vide.
+- "category" : "frais", "légume", "fruit", "viande", "poisson", "œuf", "produit laitier", "condiment", "boisson", "féculent", "surgelé", "épicerie".
+- "expires_in_days" : estimation de la DLC à partir d'aujourd'hui selon le type d'aliment (yaourt ouvert ~3, viande crue ~2, légumes frais ~5-7, œufs ~14, fromage emballé ~10, condiments ~60). Mets null si vraiment imprévisible.
+- "confidence" : ta confiance dans la détection (0 à 1).
+Ignore tout ce qui n'est pas un aliment. N'invente pas. Maximum 25 items.
+Aucun Markdown.`,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Liste tous les aliments visibles dans cette photo." },
+            { type: "image", image: data.image_data_url },
+          ],
+        },
+      ],
+      temperature: 0.2,
+      maxOutputTokens: 2500,
+    });
+
+    try {
+      const parsed = detectionSchema.parse(extractJsonObject(text));
+      return parsed;
+    } catch (e) {
+      console.error("Invalid fridge detection JSON", { text: text.slice(0, 800) });
+      throw new Error("L'IA n'a pas pu analyser la photo. Réessaie avec une image plus nette.");
+    }
+  });
+
+export const bulkAddFridgeItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        items: z
+          .array(z.object({ name: z.string().min(1).max(80), qty: z.string().max(40).optional() }))
+          .min(1)
+          .max(40),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const rows = data.items.map((it) => ({ user_id: userId, name: it.name, qty: it.qty ?? null }));
+    const { error, data: inserted } = await supabase.from("fridge_items").insert(rows).select();
+    if (error) throw new Error(error.message);
+    return { inserted: inserted?.length ?? 0 };
+  });

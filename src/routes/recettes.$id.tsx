@@ -170,6 +170,28 @@ function RecipeView({
         )}
       </div>
 
+      {/* Notes perso ("Ma variante") */}
+      {showFav && (
+        <div className="bg-card border border-border rounded-2xl p-4 md:p-5">
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+            <h2 className="font-bold inline-flex items-center gap-2"><NotebookPen className="w-4 h-4 text-primary"/>Ma variante <span className="text-xs text-muted-foreground font-normal">(notes perso)</span></h2>
+            {noteDirty && (
+              <Button size="sm" onClick={() => noteMut.mutate(noteText)} disabled={noteMut.isPending}>
+                <Save className="w-3.5 h-3.5"/>Enregistrer
+              </Button>
+            )}
+          </div>
+          <Textarea
+            placeholder="Ex : J'ai mis du lait de coco au lieu de la crème. Doubler les épices. Cuisson 5 min de moins."
+            value={noteText}
+            onChange={(e) => { setNoteText(e.target.value); setNoteDirty(true); }}
+            onBlur={() => { if (noteDirty) noteMut.mutate(noteText); }}
+            rows={3}
+            className="resize-y"
+          />
+        </div>
+      )}
+
       <div className="flex gap-3">
         <Link to="/recettes/cuisine/$id" params={{ id }} className="bg-primary text-primary-foreground px-5 py-2.5 rounded-full font-medium inline-flex items-center gap-2 hover:opacity-90">
           <Play className="w-4 h-4"/> Mode cuisine

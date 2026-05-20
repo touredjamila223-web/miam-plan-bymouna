@@ -90,6 +90,31 @@ function RecipeView({
   });
   const nut = localNutrition;
 
+  // Notes perso ("Ma variante")
+  const getNote = useServerFn(getRecipeNote);
+  const saveNote = useServerFn(upsertRecipeNote);
+  const noteQuery = useQuery({
+    queryKey: ["recipe-note", id],
+    queryFn: () => getNote({ data: { recipe_id: id } }),
+    enabled: showFav, // only logged-in users
+  });
+  const [noteText, setNoteText] = useState("");
+  const [noteDirty, setNoteDirty] = useState(false);
+  useEffect(() => {
+    if (noteQuery.data) {
+      setNoteText(noteQuery.data.notes ?? "");
+      setNoteDirty(false);
+    }
+  }, [noteQuery.data]);
+  const noteMut = useMutation({
+    mutationFn: (notes: string) => saveNote({ data: { recipe_id: id, notes } }),
+    onSuccess: () => {
+      toast.success("Note enregistrée");
+      setNoteDirty(false);
+    },
+    onError: (e: any) => toast.error(e.message ?? "Erreur"),
+  });
+
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       <Link to="/recettes" className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1"><ArrowLeft className="w-4 h-4"/>Bibliothèque</Link>

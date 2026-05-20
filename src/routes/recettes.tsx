@@ -49,6 +49,7 @@ function Recettes() {
   const [cuisine, setCuisine] = useState<string>("");
   const [appliance, setAppliance] = useState<string>("");
   const [courseType, setCourseType] = useState<string>("");
+  const [difficulty, setDifficulty] = useState<string>("");
   const [maxTime, setMaxTime] = useState<string>("0");
   const [sort, setSort] = useState<"recent" | "rated" | "loved" | "todo">("recent");
   const [bulk, setBulk] = useState<{ running: boolean; done: number; total: number; failed: number }>({
@@ -130,11 +131,12 @@ function Recettes() {
     cuisine: cuisine || undefined,
     appliance: appliance || undefined,
     course_type: courseType || undefined,
+    difficulty: difficulty || undefined,
     maxTime: maxTime && maxTime !== "0" ? Number(maxTime) : undefined,
     sort,
   };
   const { data, isLoading } = useQuery({
-    queryKey: ["recipes", search, protein, cuisine, appliance, courseType, maxTime, sort, !!user],
+    queryKey: ["recipes", search, protein, cuisine, appliance, courseType, difficulty, maxTime, sort, !!user],
     enabled: !!user,
     queryFn: () => listMine({ data: params }),
   });
@@ -175,7 +177,7 @@ function Recettes() {
     });
   }
 
-  const hasFilters = protein || cuisine || appliance || courseType || (maxTime && maxTime !== "0");
+  const hasFilters = protein || cuisine || appliance || courseType || difficulty || (maxTime && maxTime !== "0");
 
   if (location.pathname !== "/recettes") return <Outlet />;
 
@@ -244,6 +246,15 @@ function Recettes() {
               {TIME_OPTIONS.map((t) => <SelectItem key={t.v} value={t.v}>{t.label}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={difficulty} onValueChange={(v) => setDifficulty(v === "__all" ? "" : v)}>
+            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Difficulté"/></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all">Toutes</SelectItem>
+              <SelectItem value="facile">Facile</SelectItem>
+              <SelectItem value="moyen">Moyen</SelectItem>
+              <SelectItem value="difficile">Difficile</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={sort} onValueChange={(v) => setSort(v as any)}>
             <SelectTrigger className="w-[160px]"><SelectValue placeholder="Trier"/></SelectTrigger>
             <SelectContent>
@@ -251,7 +262,7 @@ function Recettes() {
             </SelectContent>
           </Select>
           {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={() => { setProtein(""); setCuisine(""); setAppliance(""); setCourseType(""); setMaxTime("0"); }}>
+            <Button variant="ghost" size="sm" onClick={() => { setProtein(""); setCuisine(""); setAppliance(""); setCourseType(""); setDifficulty(""); setMaxTime("0"); }}>
               <X className="w-4 h-4"/>Réinitialiser
             </Button>
           )}

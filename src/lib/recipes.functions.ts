@@ -1098,6 +1098,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
           maxTime?: number;
           sort?: "recent" | "rated" | "loved" | "todo";
           course_type?: string;
+          difficulty?: string;
         }
       | undefined) =>
       input ?? {},
@@ -1122,6 +1123,7 @@ export const listMyRecipes = createServerFn({ method: "GET" })
     if (data?.cuisine) query = query.ilike("cuisine_style", `%${data.cuisine}%`);
     if (data?.appliance) query = query.eq("appliance", data.appliance);
     if (data?.course_type) query = query.eq("course_type", data.course_type);
+    if (data?.difficulty) query = query.eq("difficulty", data.difficulty);
     if (data?.maxTime) query = query.lte("prep_time", data.maxTime);
     const { data: rows, error } = await query.order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
@@ -1358,4 +1360,38 @@ Réponds en JSON pour UNE portion :
         .eq("owner_id", userId);
     }
     return rounded;
+  });
+
+// ============== PERSONAL NOTES ==============
+
+export const getRecipeNote = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ recipe_id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: row, error } = await supabase
+      .from("recipe_notes")
+      .select("notes, updated_at")
+      .eq("user_id", userId)
+      .eq("recipe_id", data.recipe_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return row ?? { notes: "", updated_at: null };
+  });
+
+export const upsertRecipeNote = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ recipe_id: z.string().uuid(), notes: z.string().max(4000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { error } = await supabase
+      .from("recipe_notes")
+      .upsert(
+        { user_id: userId, recipe_id: data.recipe_id, notes: data.notes, updated_at: new Date().toISOString() },
+        { onConflict: "user_id,recipe_id" },
+      );
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });

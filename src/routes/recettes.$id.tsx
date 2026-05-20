@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getRecipe, toggleFavorite, computeNutrition } from "@/lib/recipes.functions";
+import { getRecipe, toggleFavorite, computeNutrition, getRecipeNote, upsertRecipeNote } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot, Minus, Plus, Download, Share2, Sparkles } from "lucide-react";
+import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot, Minus, Plus, Download, Share2, Sparkles, NotebookPen, Save } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { scaleQty, caloriesPerServing, caloriesTotal } from "@/lib/scale";
 import { generateRecipePdf } from "@/lib/recipe-pdf";
 
@@ -89,6 +90,31 @@ function RecipeView({
   });
   const nut = localNutrition;
 
+  // Notes perso ("Ma variante")
+  const getNote = useServerFn(getRecipeNote);
+  const saveNote = useServerFn(upsertRecipeNote);
+  const noteQuery = useQuery({
+    queryKey: ["recipe-note", id],
+    queryFn: () => getNote({ data: { recipe_id: id } }),
+    enabled: showFav, // only logged-in users
+  });
+  const [noteText, setNoteText] = useState("");
+  const [noteDirty, setNoteDirty] = useState(false);
+  useEffect(() => {
+    if (noteQuery.data) {
+      setNoteText(noteQuery.data.notes ?? "");
+      setNoteDirty(false);
+    }
+  }, [noteQuery.data]);
+  const noteMut = useMutation({
+    mutationFn: (notes: string) => saveNote({ data: { recipe_id: id, notes } }),
+    onSuccess: () => {
+      toast.success("Note enregistrée");
+      setNoteDirty(false);
+    },
+    onError: (e: any) => toast.error(e.message ?? "Erreur"),
+  });
+
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       <Link to="/recettes" className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1"><ArrowLeft className="w-4 h-4"/>Bibliothèque</Link>
@@ -143,6 +169,28 @@ function RecipeView({
           </p>
         )}
       </div>
+
+      {/* Notes perso ("Ma variante") */}
+      {showFav && (
+        <div className="bg-card border border-border rounded-2xl p-4 md:p-5">
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+            <h2 className="font-bold inline-flex items-center gap-2"><NotebookPen className="w-4 h-4 text-primary"/>Ma variante <span className="text-xs text-muted-foreground font-normal">(notes perso)</span></h2>
+            {noteDirty && (
+              <Button size="sm" onClick={() => noteMut.mutate(noteText)} disabled={noteMut.isPending}>
+                <Save className="w-3.5 h-3.5"/>Enregistrer
+              </Button>
+            )}
+          </div>
+          <Textarea
+            placeholder="Ex : J'ai mis du lait de coco au lieu de la crème. Doubler les épices. Cuisson 5 min de moins."
+            value={noteText}
+            onChange={(e) => { setNoteText(e.target.value); setNoteDirty(true); }}
+            onBlur={() => { if (noteDirty) noteMut.mutate(noteText); }}
+            rows={3}
+            className="resize-y"
+          />
+        </div>
+      )}
 
       <div className="flex gap-3">
         <Link to="/recettes/cuisine/$id" params={{ id }} className="bg-primary text-primary-foreground px-5 py-2.5 rounded-full font-medium inline-flex items-center gap-2 hover:opacity-90">

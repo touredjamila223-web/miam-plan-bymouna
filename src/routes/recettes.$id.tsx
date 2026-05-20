@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getRecipe, toggleFavorite, computeNutrition } from "@/lib/recipes.functions";
+import { getRecipe, toggleFavorite, computeNutrition, getRecipeNote, upsertRecipeNote } from "@/lib/recipes.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot, Minus, Plus, Download, Share2, Sparkles } from "lucide-react";
+import { Heart, Clock, Users, ArrowLeft, Play, Flame, Drumstick, Carrot, Minus, Plus, Download, Share2, Sparkles, NotebookPen, Save } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { scaleQty, caloriesPerServing, caloriesTotal } from "@/lib/scale";
 import { generateRecipePdf } from "@/lib/recipe-pdf";
 

@@ -1361,3 +1361,37 @@ Réponds en JSON pour UNE portion :
     }
     return rounded;
   });
+
+// ============== PERSONAL NOTES ==============
+
+export const getRecipeNote = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ recipe_id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: row, error } = await supabase
+      .from("recipe_notes")
+      .select("notes, updated_at")
+      .eq("user_id", userId)
+      .eq("recipe_id", data.recipe_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return row ?? { notes: "", updated_at: null };
+  });
+
+export const upsertRecipeNote = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ recipe_id: z.string().uuid(), notes: z.string().max(4000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { error } = await supabase
+      .from("recipe_notes")
+      .upsert(
+        { user_id: userId, recipe_id: data.recipe_id, notes: data.notes, updated_at: new Date().toISOString() },
+        { onConflict: "user_id,recipe_id" },
+      );
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
